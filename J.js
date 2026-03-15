@@ -485,7 +485,7 @@ function renderFeed() {
     if (!roots.length) {
         const msg = currentFeedTab === 'following'
             ? "No posts from people you follow yet."
-            : "No posts yet! Start the conversation!";
+            : "No posts from any friends yet";
         feed.innerHTML = `<p id="feed-empty">${msg}</p>`;
         return;
     }
