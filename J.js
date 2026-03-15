@@ -729,7 +729,7 @@ window.submitPost = async () => {
     const cooldownMs = 10000; 
     if (now - lastPostTime < cooldownMs) {
         const remaining = Math.ceil((cooldownMs - (now - lastPostTime)) / 1000);
-        alert(`Slow down! Please wait ${remaining} more second(s).`);
+        alert(`Please Wait ${remaining} More seconds. Before posting again.`);
         return;
     }
 
