@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang=en>
+<head>
+<meta charset=UTF-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>Catalyst Forums</title>
+<link rel=icon href=https://i.postimg.cc/QdffC82j/C-1-removebg-preview.png>
+<script src=https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js></script>
+<script src=https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js></script>
+<script src=https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js></script>
+<script src=https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js></script>
+<link rel=stylesheet href=S.css>
+</head>
+<body>
+<nav class="TNB"><div class=logo>Catalyst Forums</div>
+<div class=search-wrap>
+<input id=search-bar placeholder="Search for users">
+<div id=search-results></div>
+</div>
+<div class=nav-right>
+<div id=nav-auth-controls style=display:none;align-items:center;gap:8px>
+<span id=nav-username style=font-size:.8rem;color:var(--muted)></span>
+<button class=btn-ghost onclick=openSettings()>Settings</button>
+<button id=admin-btn class="btn-admin hidden" onclick=openAdminModal()>&#9881; Admin</button>
+</div>
+<button id=login-btn onclick='openModal("auth-modal")'>Login</button>
+</div>
+</nav>
+<div id=container>
+<div id=post-creator class="post-creator hidden">
+<textarea id=post-body placeholder="What's on your mind?"></textarea>
+<div id=post-media-preview style=margin-top:8px;display:none></div>
+<div style=display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px>
+<div style=display:flex;align-items:center;gap:8px>
+<input type=file id=post-media accept=image/* multiple style=display:none onchange=handlePostMedia(this)>
+<button id=attach-media-btn onclick='document.getElementById("post-media").click()' style="font-size:.8rem;padding:6px 10px" title="Up to 4 images; compressed automatically">Attach Images (up to 4)</button>
+<button id=remove-media-btn onclick=removePostMedia() style="font-size:.8rem;padding:6px 10px;display:none">✕ Remove</button>
+</div>
+<div style=display:flex;align-items:center;gap:8px>
+<button onclick=submitPost()>Post</button>
+<span onclick='openModal("guidelines-modal")' style="width: auto; font-size:.75rem;color:var(--muted);cursor:pointer;white-space:nowrap">
+Guidelines (Rules)
+</span>
+</div>
+</div>
+</div>
+<div id=feed-tabs class="feed-tabs hidden">
+<div class="feed-tab active" id=ftab-all onclick='switchFeedTab("all")'>All Posts</div>
+<div class=feed-tab id=ftab-following onclick='switchFeedTab("following")'>Following</div>
+</div>
+<div id=verify-banner class=hidden style="background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+<span style=font-size:.85rem;color:#fbbf24>
+Please verify your email address to post and reply.
+</span>
+<div style=display:flex;gap:8px;align-items:center>
+<button id=resend-verify-btn class=btn-sm style="background:rgba(251,191,36,.2);color:#fbbf24;border:1px solid rgba(251,191,36,.4)" onclick=resendVerification()>
+Resend Email
+</button>
+<button class="btn-sm btn-ghost" onclick="auth.currentUser.reload().then((()=>location.reload()))">
+I've verified ✓
+</button>
+</div>
+</div>
+<div id=main-feed>
+<p id=feed-empty>Loading All Posts, Do not exit or refresh...</p>
+</div>
+</div>
+<div id=overlay onclick=closeAll()></div>
+<div id=auth-modal class=modal>
+<h2 id=auth-title>Login</h2>
+<input type=email id=auth-email placeholder=Email>
+<input type=password id=auth-pass placeholder=Password>
+<div id=auth-msg class="msg msg-error"></div>
+<div class=modal-footer>
+<button id=auth-btn style=width:100% onclick=runAuth()>Login</button>
+<div style=display:flex;justify-content:space-between;align-items:center>
+<p id=auth-toggle-text style=font-size:.8rem;color:var(--muted);cursor:pointer;margin:0 onclick=toggleAuthMode()>
+Don't have an account? Sign Up
+</p>
+<p id=forgot-link style=font-size:.8rem;color:var(--primary);cursor:pointer;margin:0 onclick=sendPasswordReset()>
+Forgot password?
+</p>
+</div>
+</div>
+</div>
+<div id=chpass-modal class="modal sub-modal" style=max-width:360px>
+<h2>Change Password</h2>
+<label>Current password</label>
+<input type=password id=old-pass placeholder="Current password">
+<label>New password</label>
+<input type=password id=new-pass placeholder="New password (min 6 chars)">
+<label>Confirm new password</label>
+<input type=password id=conf-pass placeholder="Confirm new password">
+<div id=pass-msg class="msg msg-error"></div>
+<div class=modal-footer>
+<button style=width:100% onclick=handlePasswordChange()>Update Password</button>
+<button class=btn-ghost style=width:100% onclick='closeSubModal("chpass-modal")'>Cancel</button>
+</div>
+</div>
+<div id=change-email-modal class="modal sub-modal" style=max-width:380px>
+<h2>Change Email</h2>
+<p style="color:var(--muted);font-size:.85rem;margin:0 0 16px">
+Enter your new email and current password. You'll be signed out and a verification email will be sent to the new address.
+</p>
+<label>New email address</label>
+<input type=email id=ce-new-email placeholder=newaddress@example.com>
+<label>Confirm new email address</label>
+<input type=email id=ce-confirm-email placeholder="Confirm new email">
+<label>Current password</label>
+<input type=password id=ce-password placeholder="Your current password">
+<div id=ce-msg class="msg msg-error"></div>
+<div class=modal-footer>
+<button id=ce-btn style=width:100% onclick=confirmChangeEmail()>Send Verification Email</button>
+<button class=btn-ghost style=width:100% onclick='closeSubModal("change-email-modal")'>Cancel</button>
+</div>
+</div>
+<div id=confirm-deactivate-modal class="modal sub-modal" style=max-width:360px>
+<h2>Deactivate Account</h2>
+<p style="color:var(--muted);font-size:.85rem;margin:0 0 14px">
+Your account will be deactivated. Your posts will remain visible but you won't be able to log in or interact with anything.
+</p>
+<label>Enter your password to confirm</label>
+<div style=position:relative>
+<input type=password id=deactivate-confirm-pass placeholder="Your password" style=padding-right:40px>
+<span onclick=toggleDeactivatePassVis() style=position:absolute;right:10px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:1rem;color:var(--muted)>&#128065;</span>
+</div>
+<div id=confirm-deactivate-msg class="msg msg-error"></div>
+<div class=modal-footer>
+<button id=confirm-deactivate-btn class=btn-danger style=width:100% onclick=confirmDeactivateAccount()>
+Deactivate My Account
+</button>
+<button class=btn-ghost style=width:100% onclick=closeDeactivateModal()>Cancel</button>
+</div>
+</div>
+<div id=settings-modal class=modal style=max-width:460px>
+<h2 style=margin-bottom:0>Settings</h2>
+<div class=settings-tabs>
+<div class="settings-tab active" onclick='switchSettingsTab("profile")'>Profile</div>
+<div class=settings-tab onclick='switchSettingsTab("following")'>Following</div>
+<div class=settings-tab onclick='switchSettingsTab("friends")' id=friends-tab-btn>Friends</div>
+<div class=settings-tab onclick='switchSettingsTab("blocked")'>Blocked</div>
+<div class=settings-tab onclick='switchSettingsTab("account")'>Account</div>
+</div>
+<div class="settings-pane active" id=spane-profile>
+<div class=pfp-upload-wrap>
+<div class=pfp-preview id=settings-pfp-preview></div>
+<div style=display:flex;flex-direction:column;gap:6px>
+<button class=pfp-upload-btn onclick='document.getElementById("pfp-input").click()'>
+&#128247; Change Photo
+</button>
+<input type=file id=pfp-input accept=image/* onchange=handlePfpUpload(event)>
+<button id=remove-pfp-btn class="pfp-upload-btn hidden" onclick=removePfp() style=border-color:var(--danger);color:var(--danger)>
+✕ Remove Photo
+</button>
+<p style=margin:0;font-size:.72rem;color:var(--muted)>Max 1MB · JPG, PNG, GIF</p>
+</div>
+</div>
+<label>Username</label>
+<input id=set-username>
+<label>Bio</label>
+<textarea id=set-bio style=min-height:60px></textarea>
+<div id=profile-msg class="msg msg-success" style=margin-top:8px></div>
+<div class=modal-footer>
+<button style=width:100% onclick=saveMyProfile()>Save Profile</button>
+</div>
+</div>
+<div class=settings-pane id=spane-following>
+<div id=settings-following-list style=max-height:340px;overflow-y:auto></div>
+</div>
+<div class=settings-pane id=spane-friends>
+<div id=settings-friends-requests></div>
+<div id=settings-friends-list style=max-height:300px;overflow-y:auto></div>
+</div>
+<div class=settings-pane id=spane-blocked>
+<div id=settings-blocked-list style=max-height:340px;overflow-y:auto></div>
+</div>
+<div class=settings-pane id=spane-account>
+<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px">
+<p style="margin:0 0 2px;font-size:.72rem;color:var(--muted);font-weight:600;letter-spacing:.05em">ACCOUNT EMAIL</p>
+<p id=set-email-display style=margin:0;font-size:.9rem;word-break:break-all></p>
+<p id=settings-account-age style="margin:4px 0 0;font-size:.72rem;color:var(--muted)"></p>
+</div>
+<button class=btn-ghost style=width:100%;margin-bottom:8px onclick='openSubModal("chpass-modal")'>
+&#128273; Change Password
+</button>
+<button class=btn-ghost style=width:100%;margin-bottom:8px onclick=openChangeEmailModal()>
+&#128231; Change Email
+</button>
+<hr class=divider>
+<button class=btn-ghost style=width:100%;margin-bottom:8px onclick=auth.signOut(),location.reload()>
+Log Out
+</button>
+<hr class=divider>
+<div id=account-deactivate-msg class="msg msg-error"></div>
+<button class=btn-danger style=width:100%;opacity:.75 onclick=openDeactivateModal()>
+&#9208; Deactivate My Account
+</button>
+</div>
+</div>
+<div id=profile-modal class=modal style=max-width:500px>
+<div class=prof-header>
+<div class=avatar id=prof-avatar></div>
+<div style=flex:1>
+<div style=display:flex;align-items:center;gap:6px;flex-wrap:wrap>
+<span id=prof-name style=font-size:1.1rem;font-weight:700></span>
+<span id=prof-verified class=hidden style=color:var(--verified)>&#10004;</span>
+</div>
+<div id=prof-rank-wrap style=margin-top:4px></div>
+<p id=prof-bio style="color:var(--muted);font-size:.85rem;margin:6px 0 0"></p>
+<p id=prof-account-age style="font-size:.72rem;color:var(--muted);margin:4px 0 0"></p>
+</div>
+</div>
+<div class=prof-stats>
+<div class=prof-stat onclick='switchProfileTab("posts")'>
+<span class=stat-num id=stat-posts>0</span>
+<span class=stat-label>Posts</span>
+</div>
+<div class=prof-stat onclick='switchProfileTab("replies")'>
+<span class=stat-num id=stat-replies>0</span>
+<span class=stat-label>Replies</span>
+</div>
+<div class=prof-stat onclick='switchProfileTab("followers")'>
+<span class=stat-num id=stat-followers>0</span>
+<span class=stat-label>Followers</span>
+</div>
+<div class=prof-stat onclick='switchProfileTab("following")'>
+<span class=stat-num id=stat-following>0</span>
+<span class=stat-label>Following</span>
+</div>
+<div class=prof-stat onclick='switchProfileTab("friends")'>
+<span class=stat-num id=stat-friends>0</span>
+<span class=stat-label>Friends</span>
+</div>
+</div>
+<div id=prof-action-row class="prof-action-row hidden">
+<button id=follow-btn class=btn-follow onclick=toggleFollow()>Follow</button>
+<button id=friend-btn onclick=toggleFriendRequest() style="flex:1;min-width:80px;font-size:.85rem;padding:7px 10px">Add Friend</button>
+<button id=block-btn class=btn-block onclick=toggleBlock()>Block</button>
+</div>
+<div class=prof-tabs>
+<div class="prof-tab active" id=ptab-posts onclick='switchProfileTab("posts")'>Posts</div>
+<div class=prof-tab id=ptab-replies onclick='switchProfileTab("replies")'>Replies</div>
+<div class=prof-tab id=ptab-followers onclick='switchProfileTab("followers")'>Followers</div>
+<div class=prof-tab id=ptab-following onclick='switchProfileTab("following")'>Following</div>
+<div class=prof-tab id=ptab-friends onclick='switchProfileTab("friends")'>Friends</div>
+</div>
+<div class="prof-tab-content active" id=content-posts></div>
+<div class=prof-tab-content id=content-replies></div>
+<div class=prof-tab-content id=content-followers></div>
+<div class=prof-tab-content id=content-following></div>
+<div class=prof-tab-content id=content-friends></div>
+<button style=width:100%;margin-top:14px onclick=closeAll()>Close</button>
+</div>
+<div id=guidelines-modal class=modal style=max-width:480px>
+<h2>&#128203; Community Guidelines</h2>
+<div style=font-size:.88rem;line-height:1.7>
+<p style="color:var(--muted);font-size:.8rem;margin:0 0 14px">By posting on Catalyst Forums you agree to follow these rules.</p>
+<p style="font-weight:700;color:var(--primary);margin:0 0 4px">1. Be respectful</p>
+<p style="margin:0 0 12px;color:var(--muted)">Treat everyone with respect.</p>
+<p style="font-weight:700;color:var(--primary);margin:0 0 4px">2. No hate speech or slurs</p>
+<p style="margin:0 0 12px;color:var(--muted)">Racial slurs are not allowed in any form.</p>
+<p style="font-weight:700;color:var(--primary);margin:0 0 4px">3. Swearing</p>
+<p style="margin:0 0 12px;color:var(--muted)">Casual swearing is fine. Swearing at someone may result in a ban.</p>
+<p style="font-weight:700;color:var(--primary);margin:0 0 4px">4. Sexual content</p>
+<p style="margin:0 0 12px;color:var(--muted)">Inappropriate sexual content will result in punishment.</p>
+<p style="font-weight:700;color:var(--primary);margin:0 0 4px">5. No threats or calls for harm</p>
+<p style="margin:0 0 12px;color:var(--muted)">Threatening language results in an immediate ban.</p>
+<p style="font-weight:700;color:var(--primary);margin:0 0 4px">6. No spam or advertising</p>
+<p style="margin:0 0 12px;color:var(--muted)">Repeated posting or unapproved advertising results in a ban.</p>
+<p style="font-weight:700;color:var(--primary);margin:0 0 4px">7. Akimov Files</p>
+<p style="margin:0 0 12px;color:var(--muted)">Akimov Files are allowed👍👍👍👍👍👍👍👍👍</p>
+<p style="font-weight:700;color:var(--primary);margin:0 0 4px">8. False Information</p>
+<p style="margin:0 0 12px;color:var(--muted)">Using inspect element or photoshop to Change a persons post and defaming them will result in a ban.</p>
+<p style="font-weight:700;color:var(--primary);margin:0 0 4px">Dev Note</p>
+<p style=margin:0;color:var(--muted)>Content the developer finds inappropriate may be removed.</p>
+</div>
+<button style=width:100%;margin-top:18px onclick='closeModal("guidelines-modal")'>Got it</button>
+</div>
+<div id=viewers-modal class=modal style=max-width:360px>
+<h3>&#128065; Viewed by</h3>
+<div id=viewers-list style=max-height:320px;overflow-y:auto></div>
+<button style=width:100%;margin-top:14px onclick='closeModal("viewers-modal")'>Close</button>
+</div>
+<div id=admin-modal class=modal style=max-width:480px>
+<h3>&#9881; User Management</h3>
+<input id=admin-search placeholder="Search by username or UID..." oninput=filterAdminUsers() style=margin-bottom:10px>
+<div id=admin-user-list></div>
+<p id=admin-no-results style="text-align:center;color:var(--muted);font-size:.85rem;display:none;padding:20px 0">
+No users found
+</p>
+<button class=btn-ghost style=width:100%;margin-top:12px onclick=closeAll()>Close</button>
+</div>
+<div id=media-modal class=modal>
+<div class=modal-content>
+<span class=close onclick='closeModal("media-modal")' style=position:absolute;top:10px;right:20px;font-size:2rem;cursor:pointer;color:var(--text);z-index:10>&times;</span>
+<div id=media-container></div>
+</div>
+</div>
+<script src=J.js></script>
+</body>
+</html>
