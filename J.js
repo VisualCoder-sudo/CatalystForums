@@ -108,7 +108,7 @@ const map = {
 "auth/network-request-failed": "Network error. Check your connection.",
 "auth/requires-recent-login": "Please log out and log back in first.",
 };
-return map[code] || "Something went wrong. Please try again.";
+return map[code] || "Unknown error.";
 }
 function showMsg(id, text, type = "error") {
 const el = document.getElementById(id);
@@ -455,31 +455,41 @@ window.switchFeedTab = tab => {
 currentFeedTab = tab;
 document.getElementById('ftab-all') .classList.toggle('active', tab === 'all');
 document.getElementById('ftab-following').classList.toggle('active', tab === 'following');
+document.getElementById('ftab-friends') .classList.toggle('active', tab === 'friends');
 renderFeed();
 };
 function renderFeed() {
-const feed = document.getElementById('main-feed');
-feed.innerHTML = "";
-const blocked = me ? (me.blocked || []) : [];
-let roots = allPosts.filter(p =>
-!p.parentId &&
-allUsers[p.authorUid] &&
-!blocked.includes(p.authorUid)
-);
-if (currentFeedTab === 'following' && me) {
-const following = me.following || [];
-roots = roots.filter(p =>
-following.includes(p.authorUid) || p.authorUid === me.id
-);
-}
-if (!roots.length) {
-const msg = currentFeedTab === 'following'
-? "No posts from people you follow yet."
-: "No posts yet — start the conversation!";
-feed.innerHTML = `<p id="feed-empty">${msg}</p>`;
-return;
-}
-roots.forEach(p => feed.appendChild(buildPost(p, 0)));
+    const feed = document.getElementById('main-feed');
+    feed.innerHTML = "";
+    const blocked = me ? (me.blocked || []) : [];
+    let roots = allPosts.filter(p =>
+        !p.parentId &&
+        allUsers[p.authorUid] &&
+        !blocked.includes(p.authorUid)
+    );
+
+    // Update Following tab logic
+    if (currentFeedTab === 'following' && me) {
+        const following = me.following || [];
+        // Removed: || p.authorUid === me.id
+        roots = roots.filter(p => following.includes(p.authorUid)); 
+    }
+
+    // Update Friends tab logic
+    if (currentFeedTab === 'friends' && me) {
+        const friends = me.friends || [];
+        // Removed: || p.authorUid === me.id
+        roots = roots.filter(p => friends.includes(p.authorUid));
+    }
+
+    if (!roots.length) {
+        const msg = currentFeedTab === 'following'
+            ? "No posts from people you follow yet."
+            : "No posts yet! Start the conversation!";
+        feed.innerHTML = `<p id="feed-empty">${msg}</p>`;
+        return;
+    }
+    roots.forEach(p => feed.appendChild(buildPost(p, 0)));
 }
 // ── Build a single post card ──────────────────────────────────────────
 function buildPost(post, depth) {
@@ -729,7 +739,7 @@ window.submitPost = async () => {
     const cooldownMs = 10000; 
     if (now - lastPostTime < cooldownMs) {
         const remaining = Math.ceil((cooldownMs - (now - lastPostTime)) / 1000);
-        alert(`Please Wait ${remaining} More seconds. Before posting again.`);
+        alert(`Slow down! Please wait ${remaining} more second(s).`);
         return;
     }
 
@@ -1993,12 +2003,12 @@ const dBtn = document.createElement('button');
 dBtn.className = "btn-sm btn-danger";
 dBtn.style.opacity = "0.7";
 if (u.deactivated) {
-dBtn.textContent = "↩ Reactivate";
+dBtn.textContent = "Reactivate";
 dBtn.style.background = "var(--success)";
 dBtn.style.color = "#0f172a";
-dBtn.onclick = () => adminAction(uid, { deactivated: false, rank: "User" }, dBtn, "Reactivated ✔");
+dBtn.onclick = () => adminAction(uid, { deactivated: false, rank: "User" }, dBtn, "Reactivated");
 } else {
-dBtn.textContent = "⏸ Deactivate";
+dBtn.textContent = "Deactivate";
 dBtn.onclick = () => adminDeactivate(uid, u.displayName, dBtn);
 }
 btns.appendChild(dBtn);
@@ -2007,7 +2017,7 @@ btns.appendChild(dBtn);
 const wipeBtn = document.createElement('button');
 wipeBtn.className = "btn-sm btn-danger";
 wipeBtn.style.opacity = "0.7";
-wipeBtn.textContent = "🗑 Wipe Posts";
+wipeBtn.textContent = "Wipe Posts";
 wipeBtn.onclick = () => adminWipePosts(uid, u.displayName, wipeBtn);
 btns.appendChild(wipeBtn);
 // Change Email / Cancel Email Change
@@ -2254,7 +2264,7 @@ btn.style.background = "var(--success)";
 btn.style.color = "#0f172a";
 setTimeout(() => {
 btn.disabled = false;
-btn.textContent = "🗑 Wipe Posts";
+btn.textContent = "Wipe Posts";
 btn.style.background = "";
 btn.style.color = "";
 renderAdminList();
@@ -2296,7 +2306,7 @@ renderFeed();
 renderAdminList();
 } catch (e) {
 btn.disabled = false;
-btn.textContent = "⏸ Deactivate";
+btn.textContent = "Deactivate";
 alert("Failed: " + e.message);
 }
 }
