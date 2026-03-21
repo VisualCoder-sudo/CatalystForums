@@ -19,10 +19,8 @@ const BOOTSTRAP_ADMIN = ADMIN_UID;
 const isAdminUID      = uid => uid === ADMIN_UID;
 const isBootstrap     = uid => uid === BOOTSTRAP_ADMIN;
 
-// Ranks that use built-in styling (not custom purple)
 const SYSTEM_RANKS = ["Admin", "User", "Banned", "Deactivated", ""];
 
-// ── Global state ─────────────────────────────────────────────────────────
 let me               = null;
 let allUsers         = {};
 let allPosts         = [];
@@ -46,24 +44,16 @@ window.onerror = (message, source, lineno, colno, error) => {
     return false;
 };
 
-// ── Quick-post popup ─────────────────────────────────────────────────────
-// The floating ✎ button appears when the main post-creator scrolls out of
-// view. Clicking it opens a compact popup with the same post functionality.
-// When the user scrolls back up so the creator is visible again, the FAB
-// hides automatically via IntersectionObserver.
 
 (function initQuickPost() {
-    // Watch the main post-creator — show FAB when it leaves the viewport
     const observer = new IntersectionObserver(entries => {
         const fab     = document.getElementById('quick-post-fab');
         const popup   = document.getElementById('quick-post-popup');
         const creator = document.getElementById('post-creator');
         if (!fab) return;
         const isVisible = entries[0].isIntersecting;
-        // Only show FAB if user is logged in and can post
         const canShow = me && !creator.classList.contains('hidden');
         if (isVisible) {
-            // Creator back in view: hide FAB and close popup
             fab.style.display = 'none';
             if (popup) popup.style.display = 'none';
         } else if (canShow) {
@@ -71,13 +61,11 @@ window.onerror = (message, source, lineno, colno, error) => {
         }
     }, { threshold: 0.1 });
 
-    // Start observing once DOM is ready
     document.addEventListener('DOMContentLoaded', () => {
         const creator = document.getElementById('post-creator');
         if (creator) observer.observe(creator);
     });
 
-    // Also re-run when auth state changes (creator may become visible/hidden)
     window._refreshQuickPostFab = function() {
         const creator = document.getElementById('post-creator');
         const fab     = document.getElementById('quick-post-fab');
@@ -85,7 +73,6 @@ window.onerror = (message, source, lineno, colno, error) => {
         if (creator.classList.contains('hidden')) {
             fab.style.display = 'none';
         }
-        // Re-observe so the threshold fires correctly
         observer.unobserve(creator);
         observer.observe(creator);
     };
@@ -106,7 +93,6 @@ window.openQuickPost = function() {
 window.closeQuickPost = function() {
     const popup = document.getElementById('quick-post-popup');
     if (popup) popup.style.display = 'none';
-    // Show FAB again if creator is still out of view
     const creator = document.getElementById('post-creator');
     const fab     = document.getElementById('quick-post-fab');
     if (!fab || !creator) return;
@@ -117,31 +103,23 @@ window.closeQuickPost = function() {
     }
 };
 
-// Quick post uses the same submitPost logic but reads from quick-post-body
 window.submitQuickPost = async function() {
     const ta = document.getElementById('quick-post-body');
     if (!ta) return;
-    // Copy the text into the main post body and call submitPost
-    // This reuses all the existing validation, profanity check, media upload etc.
     const mainBody = document.getElementById('post-body');
     if (!mainBody) return;
     const originalValue = mainBody.value;
     mainBody.value = ta.value;
     await submitPost();
-    // If post succeeded the textarea will be cleared by submitPost
     if (!mainBody.value) {
         ta.value = '';
         closeQuickPost();
     } else {
-        // Restore if something went wrong
         mainBody.value = originalValue;
     }
 };
 
-// Minimal media handler for quick-post (reuses the main one)
 window.handleQuickPostMedia = function(input) {
-    // Just forward to the main media handler for now
-    // (attaches to the main postMedia queue)
     handlePostMedia(input);
 };
 
@@ -159,7 +137,6 @@ async function uploadToCloudinary(file) {
     formData.append('file',          file);
     formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
 
-    // Route to the correct Cloudinary endpoint based on file type
     const resourceType = file.type.startsWith('video/') ? 'video' : 'image';
     const response = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`,
@@ -175,12 +152,11 @@ async function uploadToCloudinary(file) {
     return data.secure_url;
 }
 
-// ── Badge class helper ────────────────────────────────────────────────────
 function rankBadgeClass(rank) {
     if (rank === "Admin")                            return "badge-admin";
     if (rank === "Banned" || rank === "Deactivated") return "badge-banned";
     if (!rank || rank === "User")                    return "badge-rank";
-    return "badge-custom"; // custom ranks get purple
+    return "badge-custom";
 }
 
 window.openModal = id => {
@@ -201,7 +177,6 @@ window.closeAll = () => {
     currentProfileUid = null;
 };
 
-// Sub-modals hide the settings panel and show their own blurred backdrop.
 function openSubModal(id) {
     document.getElementById('settings-modal').style.display = 'none';
     let bd = document.getElementById('sub-bd');
@@ -227,7 +202,6 @@ function closeSubModal(id) {
     document.getElementById('settings-modal').style.display = 'block';
 }
 
-// ── Auth error messages ───────────────────────────────────────────────────
 function friendlyAuthError(code) {
     const map = {
         "auth/wrong-password":         "Incorrect password.",
@@ -257,7 +231,6 @@ function clearMsg(id) {
     el.textContent = "";
 }
 
-// ── Avatar rendering ──────────────────────────────────────────────────────
 function renderAvatarEl(el, user) {
     if (!el) return;
     if (user && user.photoURL) {
@@ -279,7 +252,6 @@ function makeSmallAvatar(user) {
     return div;
 }
 
-// ── Account age formatting ────────────────────────────────────────────────
 function formatAccountAge(createdAt) {
     if (!createdAt) return "Unknown";
     const date = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
@@ -298,8 +270,6 @@ function accountOlderThan(createdAt, seconds) {
     return (new Date() - date) / 1000 > seconds;
 }
 
-// ── Profanity filter ──────────────────────────────────────────────────────
-// Strips ALL non-letter characters before checking, so "n.i.g.g.e.r" etc. are caught.
 const HARD_BLOCKED_WORDS = [
     "nigger", "nigga", "kike", "spic", "chink", "wetback",
     "faggot", "tranny", "nonce", "cock", "rape", "pussy",
@@ -312,7 +282,6 @@ function containsProfanity(text) {
 }
 
 
-  // ── Styled dialog helpers (replaces native alert/confirm/prompt) ──────────────────
 
   function _buildDialogOverlay() {
       document.getElementById('_dialog-overlay')?.remove();
@@ -326,7 +295,6 @@ function containsProfanity(text) {
       return { ov, box };
   }
 
-  // showAlert — styled replacement for alert()
   function showAlert(msg, title) {
       return new Promise(resolve => {
           const { ov, box } = _buildDialogOverlay();
@@ -350,7 +318,6 @@ function containsProfanity(text) {
       });
   }
 
-  // showConfirm — styled replacement for confirm()
   function showConfirm(msg, title) {
       return new Promise(resolve => {
           const { ov, box } = _buildDialogOverlay();
@@ -381,7 +348,6 @@ function containsProfanity(text) {
       });
   }
 
-  // showPrompt — styled replacement for prompt()
   function showPrompt(msg, defaultVal) {
       return new Promise(resolve => {
           const { ov, box } = _buildDialogOverlay();
@@ -412,10 +378,6 @@ function containsProfanity(text) {
   }
   
 
-// ════════════════════════════════════════════════════════════════════════
-// POST MEDIA HANDLING
-// BUG FIX #2 & #13: Single definition, correct reset, uses Cloudinary previews
-// ════════════════════════════════════════════════════════════════════════
 
 function renderMediaPreviews() {
     const preview = document.getElementById('post-media-preview');
@@ -433,18 +395,15 @@ function renderMediaPreviews() {
     postMedia.forEach((media, index) => {
         const isVideo = media.mimeType.startsWith('video/');
         const container = document.createElement('div');
-        // Videos get a wider preview tile
         container.style.cssText = isVideo
             ? "position:relative; display:inline-block; width:120px; height:70px;"
             : "position:relative; display:inline-block; width:70px; height:70px;";
 
         if (isVideo) {
-            // Show a video element so the user sees a frame
             const vid = document.createElement('video');
             vid.src           = media.localUrl;
             vid.muted         = true;
             vid.style.cssText = "width:100%; height:100%; object-fit:cover; border-radius:8px; border:1px solid var(--primary);";
-            // Overlay a play icon so it's clear it's a video
             const playIcon = document.createElement('div');
             playIcon.textContent  = "▶";
             playIcon.style.cssText = [
@@ -491,14 +450,12 @@ window.handlePostMedia = input => {
             return;
         }
 
-        // Only one video allowed per post
         if (isVideo && postMedia.some(m => m.mimeType.startsWith('video/'))) {
             showAlert('Only one video is allowed per post.');
             input.value = '';
             return;
         }
 
-        // Videos count as all 4 slots (can't mix video + images)
         if (isVideo && postMedia.some(m => m.mimeType.startsWith('image/'))) {
             showAlert('You cannot add Videos with Images, It\'s one or the other. (Data aint cheap!)');
             input.value = '';
@@ -539,16 +496,12 @@ window.handlePostMedia = input => {
     input.value = '';
 };
 
-// BUG FIX #2: was `postMedia = null` which broke future uploads
 window.removePostMedia = () => {
     postMedia.forEach(m => URL.revokeObjectURL(m.localUrl));
     postMedia = [];
     renderMediaPreviews();
 };
 
-// ════════════════════════════════════════════════════════════════════════
-// AUTH STATE LISTENER
-// ════════════════════════════════════════════════════════════════════════
 
 auth.onAuthStateChanged(async user => {
     if (!user) {
@@ -566,7 +519,6 @@ auth.onAuthStateChanged(async user => {
     const ref  = db.collection("users").doc(user.uid);
     const snap = await ref.get();
 
-    // Block banned / deactivated users on login (admin UID is always immune)
     if (snap.exists && !isAdminUID(user.uid)) {
         const d = snap.data();
         if (d.deactivated === true) {
@@ -602,12 +554,10 @@ auth.onAuthStateChanged(async user => {
         }
     }
 
-    // Show logged-in UI
     document.getElementById('login-btn').classList.add('hidden');
     document.getElementById('nav-auth-controls').style.display = 'flex';
     document.getElementById('feed-tabs').classList.remove('hidden');
 
-    // Create Firestore doc for brand-new users
     if (!snap.exists) {
         await ref.set({
             displayName:        user.email.split('@')[0],
@@ -624,7 +574,6 @@ auth.onAuthStateChanged(async user => {
             createdAt:          firebase.firestore.FieldValue.serverTimestamp()
         });
     } else {
-        // Silently migrate any missing fields
         const data = snap.data();
         const upd  = {};
         if (!Array.isArray(data.followers))          upd.followers          = [];
@@ -646,12 +595,10 @@ auth.onAuthStateChanged(async user => {
         if (Object.keys(upd).length) await ref.update(upd);
     }
 
-    // Live listener on own user document
     ref.onSnapshot(doc => {
         if (!doc.exists) return;
         const data = doc.data();
 
-        // Auto-lift expired timed bans
         if (data.rank === "Banned" && data.bannedUntil && !isAdminUID(user.uid)) {
             const until = data.bannedUntil.toDate
                 ? data.bannedUntil.toDate()
@@ -665,14 +612,12 @@ auth.onAuthStateChanged(async user => {
             return;
         }
 
-        // Kick live banned users (not admin)
         if (data.rank === "Banned" && !isAdminUID(user.uid)) {
             auth.signOut();
             location.reload();
             return;
         }
 
-        // Build the 'me' object — admin UID always gets Admin rank in memory
         me = {
             id:   user.uid,
             ...data,
@@ -680,11 +625,9 @@ auth.onAuthStateChanged(async user => {
         };
         allUsers[user.uid] = { ...data, rank: me.rank };
 
-        // Show admin button only for admin UID
         document.getElementById('admin-btn')
             .classList.toggle('hidden', !isAdminUID(user.uid) && me.rank !== "Admin");
 
-        // Update friend-request count badge on the Settings menu option
         const reqCount = (me.friendRequestsIn || []).length;
         const ftbMain = document.getElementById('friends-tab-btn');
         if (ftbMain) {
@@ -692,18 +635,15 @@ auth.onAuthStateChanged(async user => {
                 ? 'Friends <span class="req-badge">' + reqCount + '</span>'
                 : 'Friends';
         }
-        // Also badge the settings menu item in quick menu if present
         const menuSettingsBadge = document.getElementById('menu-friend-badge');
         if (menuSettingsBadge) {
             menuSettingsBadge.textContent   = reqCount || '';
             menuSettingsBadge.style.display = reqCount ? 'inline-block' : 'none';
         }
 
-        // Show post creator only if email is verified (or admin)
         const canPost = user.emailVerified || isAdminUID(user.uid);
         document.getElementById('post-creator').classList.toggle('hidden', !canPost);
 
-        // Show attach-media button only if account is old enough
         const canAttachMedia = canPost && accountOlderThan(me.createdAt, 3600);
         const attachBtn = document.getElementById('attach-media-btn');
         if (attachBtn) attachBtn.style.display = canAttachMedia ? '' : 'none';
@@ -720,7 +660,6 @@ auth.onAuthStateChanged(async user => {
     });
 });
 
-// ── Real-time Firestore listeners ─────────────────────────────────────────
 
 db.collection("users").onSnapshot({
     next: snap => {
@@ -752,9 +691,6 @@ db.collection("posts").orderBy("createdAt", "desc").onSnapshot({
     }
 });
 
-// ════════════════════════════════════════════════════════════════════════
-// FEED RENDERING
-// ════════════════════════════════════════════════════════════════════════
 
 window.switchFeedTab = tab => {
     currentFeedTab = tab;
@@ -791,7 +727,6 @@ function renderFeed() {
     }
 
     if (!roots.length) {
-        // BUG FIX #6: correct empty message per tab
         let msg = "No posts yet!";
         if (currentFeedTab === 'following') msg = "No posts from people you follow yet.";
         if (currentFeedTab === 'friends')   msg = "No posts from any friends yet.";
@@ -815,7 +750,6 @@ function renderFeed() {
     }
 }
 
-// ── Build a single post card ──────────────────────────────────────────────
 function buildPost(post, depth) {
     const u             = allUsers[post.authorUid] || { displayName: "Deleted User", rank: "User", verified: false };
     const isBan         = u.rank === "Banned";
@@ -828,7 +762,6 @@ function buildPost(post, depth) {
     const emailOk       = me && (auth.currentUser?.emailVerified || me.rank === "Admin");
     const isFriendPost  = me && (me.friends || []).includes(post.authorUid);
 
-    // Record post view (top-level only, not your own)
     if (depth === 0 && me && me.id !== post.authorUid && !views.includes(me.id)) {
         db.collection("posts").doc(post.id)
             .update({ views: firebase.firestore.FieldValue.arrayUnion(me.id) })
@@ -839,11 +772,9 @@ function buildPost(post, depth) {
     wrap.className = depth === 0 ? "post" : "reply-box";
     if (depth === 0) wrap.dataset.postId = post.id;
 
-    // ── Header ──
     const header = document.createElement('div');
     header.className = "post-header";
 
-    // Mini avatar
     const miniAv = document.createElement('div');
     miniAv.style.cssText = [
         "width:26px", "height:26px", "border-radius:50%",
@@ -860,14 +791,12 @@ function buildPost(post, depth) {
     }
     header.appendChild(miniAv);
 
-    // Author name
     const authorBtn = document.createElement('span');
     authorBtn.className = "author-btn";
     authorBtn.textContent = u.displayName;
     authorBtn.onclick = () => openProfile(post.authorUid);
     header.appendChild(authorBtn);
 
-    // Verified checkmark
     if (u.verified) {
         const vc = document.createElement('img');
         vc.className  = "v-check";
@@ -875,7 +804,6 @@ function buildPost(post, depth) {
         header.appendChild(vc);
     }
 
-    // Friend badge OR rank badge
     if (isFriendPost) {
         const fb = document.createElement('span');
         fb.className  = "badge badge-friend";
@@ -888,7 +816,6 @@ function buildPost(post, depth) {
         header.appendChild(rb);
     }
 
-    // Timestamp
     if (post.createdAt) {
         const ts   = document.createElement('span');
         ts.style.cssText = "font-size:0.72rem; color:var(--muted); margin-left:auto; white-space:nowrap;";
@@ -909,7 +836,6 @@ function buildPost(post, depth) {
 
     wrap.appendChild(header);
 
-    // ── Post text ──
     if (post.text && post.text.trim()) {
         const txt = document.createElement('p');
         txt.className  = "post-text";
@@ -918,12 +844,10 @@ function buildPost(post, depth) {
         wrap.appendChild(txt);
     }
 
-    // ── Media grid (Cloudinary URLs — supports images and videos) ──
     if (post.mediaList && post.mediaList.length > 0 && !isBan) {
         const count   = post.mediaList.length;
         const hasVideo = post.mediaList.some(m => (m.type || '').startsWith('video/'));
         const grid    = document.createElement('div');
-        // Videos get full width regardless of count
         grid.style.cssText = `
             display: grid;
             grid-template-columns: ${(count === 1 || hasVideo) ? '1fr' : '1fr 1fr'};
@@ -935,7 +859,6 @@ function buildPost(post, depth) {
             const isVideo = (media.type || '').startsWith('video/');
 
             if (isVideo) {
-                // ── Video element ──
                 const vid = document.createElement('video');
                 vid.src      = media.url;
                 vid.controls = true;
@@ -947,14 +870,11 @@ function buildPost(post, depth) {
                     background: #000;
                     cursor: pointer;
                 `;
-                // Click opens fullscreen lightbox
                 vid.onclick = e => {
-                    // Only open lightbox if not clicking native controls
                     if (e.target === vid && !vid.paused) return;
                 };
                 grid.appendChild(vid);
             } else {
-                // ── Image element ──
                 const img = document.createElement('img');
                 img.src          = media.url;
                 img.loading      = "lazy";
@@ -977,7 +897,6 @@ function buildPost(post, depth) {
         wrap.appendChild(grid);
     }
 
-    // ── Deactivated note ──
     if (isDeact) {
         const note = document.createElement('p');
         note.style.cssText = "font-size:0.72rem; color:var(--muted); margin:0 0 6px; font-style:italic;";
@@ -985,12 +904,10 @@ function buildPost(post, depth) {
         wrap.appendChild(note);
     }
 
-    // ── Action bar ──
     if (!isBan && !isDeact) {
         const actions = document.createElement('div');
         actions.className = "post-actions";
 
-        // Like button
         const likeBtn = document.createElement('span');
         likeBtn.className = "like-btn" + (isLiked ? " liked" : "");
         likeBtn.innerHTML = `\u2665 <span class="like-count">${likes.length || ""}</span>`;
@@ -1007,7 +924,6 @@ function buildPost(post, depth) {
         }
         actions.appendChild(likeBtn);
 
-        // Reply button
         const replySpan = document.createElement('span');
         replySpan.textContent = "Reply";
         if (!me) {
@@ -1023,7 +939,6 @@ function buildPost(post, depth) {
         }
         actions.appendChild(replySpan);
 
-        // Delete button
         if (canDel) {
             const delSpan = document.createElement('span');
             delSpan.className  = "del-btn";
@@ -1032,7 +947,6 @@ function buildPost(post, depth) {
             actions.appendChild(delSpan);
         }
 
-        // View count (top-level only)
         if (depth === 0) {
             const viewSpan = document.createElement('span');
             viewSpan.style.cssText = "margin-left:auto; display:flex; align-items:center; gap:4px; font-size:0.78rem; color:var(--muted);";
@@ -1049,7 +963,6 @@ function buildPost(post, depth) {
 
         wrap.appendChild(actions);
 
-        // Reply input with optional image attachment
         const replyWrap = document.createElement('div');
         replyWrap.className = "reply-input-wrap";
         if (me && emailOk) {
@@ -1081,8 +994,6 @@ function buildPost(post, depth) {
         wrap.appendChild(replyWrap);
     }
 
-    // ── Collapsible replies ──
-    // Filter out replies from blocked users and banned/deactivated accounts
     const _myBlocked = me ? (me.blocked || []) : [];
     const children = allPosts.filter(r => {
         if (r.parentId !== post.id) return false;
@@ -1128,7 +1039,6 @@ function buildPost(post, depth) {
     return wrap;
 }
 
-// ── Likes ─────────────────────────────────────────────────────────────────
 function toggleLike(postId, currentLikes, btn) {
     if (!me) return;
     const liked    = currentLikes.includes(me.id);
@@ -1140,15 +1050,10 @@ function toggleLike(postId, currentLikes, btn) {
     btn.querySelector('.like-count').textContent = newLikes.length || "";
 }
 
-// ════════════════════════════════════════════════════════════════════════
-// SUBMIT POST — uploads images to Cloudinary, saves URLs to Firestore
-// BUG FIX #3: no longer stores base64 strings in Firestore documents
-// ════════════════════════════════════════════════════════════════════════
 
 window.submitPost = async () => {
     if (!me) return;
 
-    // Cooldown check (10 seconds)
     const now = Date.now();
     if (now - lastPostTime < 10000) {
         const remaining = Math.ceil((10000 - (now - lastPostTime)) / 1000);
@@ -1159,7 +1064,6 @@ window.submitPost = async () => {
     const body = document.getElementById('post-body');
     const val  = body.value.trim();
 
-    // Must have text or at least one image
     if (!val && postMedia.length === 0) return;
 
     if (containsProfanity(val)) {
@@ -1173,7 +1077,6 @@ window.submitPost = async () => {
     if (btn) { btn.disabled = true; btn.textContent = "Posting…"; }
 
     try {
-        // Upload each file to Cloudinary, collect secure URLs
         const mediaArray = [];
         for (let i = 0; i < postMedia.length; i++) {
             const item     = postMedia[i];
@@ -1184,7 +1087,6 @@ window.submitPost = async () => {
             mediaArray.push({ url, type: item.mimeType });
         }
 
-        // Save post to Firestore (only URLs, never raw image data)
         await db.collection("posts").add({
             text:      val,
             authorUid: me.id,
@@ -1195,7 +1097,6 @@ window.submitPost = async () => {
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        // Cleanup
         lastPostTime = Date.now();
         body.value   = "";
         postMedia.forEach(m => URL.revokeObjectURL(m.localUrl));
@@ -1210,7 +1111,6 @@ window.submitPost = async () => {
     }
 };
 
-// ── Send reply ────────────────────────────────────────────────────────────
 async function sendReply(parentId, input, wrap) {
     if (!me) return;
     const now = Date.now();
@@ -1263,12 +1163,10 @@ function renderReplyPreviews(parentId, container) {
     });
 }
 
-// ── Delete post ───────────────────────────────────────────────────────────
 window.deletePost = async id => {
     if (!await showConfirm("Delete this post and all its replies? This CANNOT be undone.")) return;
     expandedPosts.delete(id);
 
-    // Collect all descendants recursively
     const toDelete = [id];
     function collectDescendants(parentId) {
         allPosts.filter(p => p.parentId === parentId).forEach(p => {
@@ -1291,9 +1189,6 @@ function findRootPostId(postId) {
     return findRootPostId(post.parentId);
 }
 
-// ════════════════════════════════════════════════════════════════════════
-// SEARCH
-// ════════════════════════════════════════════════════════════════════════
 
 document.getElementById('search-bar').addEventListener('input', function () {
     const q = this.value.toLowerCase().trim();
@@ -1360,9 +1255,6 @@ document.addEventListener('click', e => {
     }
 });
 
-// ════════════════════════════════════════════════════════════════════════
-// PROFILE MODAL
-// ════════════════════════════════════════════════════════════════════════
 
 window.openProfile = uid => {
     currentProfileUid = uid;
@@ -1395,7 +1287,6 @@ window.openProfile = uid => {
         }
     }
 
-    // Action row
     const ar = document.getElementById('prof-action-row');
     if (!me || uid === me.id || (allUsers[uid] && allUsers[uid].deactivated)) {
         ar.classList.add('hidden');
@@ -1446,7 +1337,6 @@ window.openProfile = uid => {
     openModal('profile-modal');
 };
 
-// ── Profile tab content ───────────────────────────────────────────────────
 function refreshProfileTabs(uid) {
     const u = allUsers[uid];
     if (!u) return;
@@ -1465,7 +1355,6 @@ function refreshProfileTabs(uid) {
     FriendsStat.textContent = friends.length;
     if (friends.length >= 1) {FriendsStat.innerText = friends.length} else {FriendsStat.innerText = "NO"}
 
-    // Posts tab
     const postsEl = document.getElementById('content-posts');
     postsEl.innerHTML = "";
     if (!uPosts.length) {
@@ -1502,7 +1391,6 @@ function refreshProfileTabs(uid) {
         });
     }
 
-    // Replies tab
     const repliesEl = document.getElementById('content-replies');
     repliesEl.innerHTML = "";
     if (!uReplies.length) {
@@ -1552,7 +1440,6 @@ function buildUserList(containerId, uids, emptyMsg) {
 
     const valid = uids.filter(uid => allUsers[uid]);
 
-    // Search bar - filters list client-side with no DB calls
     const searchWrap = document.createElement('div');
     searchWrap.style.cssText = 'margin-bottom:10px;';
     const searchInp = document.createElement('input');
@@ -1587,7 +1474,6 @@ function buildUserList(containerId, uids, emptyMsg) {
         rowsWrap.appendChild(row);
     });
 
-    // Filter rows as user types - purely client-side
     searchInp.addEventListener('input', function() {
         const q = this.value.toLowerCase().trim();
         let anyVisible = false;
@@ -1596,7 +1482,6 @@ function buildUserList(containerId, uids, emptyMsg) {
             row.style.display = match ? '' : 'none';
             if (match) anyVisible = true;
         });
-        // Show empty message if nothing matches
         let noRes = rowsWrap.querySelector('.user-list-no-results');
         if (!anyVisible) {
             if (!noRes) {
@@ -1618,9 +1503,6 @@ window.switchProfileTab = tab => {
     });
 };
 
-// ════════════════════════════════════════════════════════════════════════
-// FOLLOW / FRIEND / BLOCK
-// ════════════════════════════════════════════════════════════════════════
 
 window.toggleFollow = async () => {
     if (!me || !currentProfileUid || currentProfileUid === me.id) return;
@@ -1703,8 +1585,6 @@ window.toggleFriendRequest = async () => {
     frd.disabled = false;
 };
 
-// Merge all updates for each doc into ONE batch.update call per doc.
-// Firestore only allows a single write per document per batch.
 async function respondFriendRequest(fromUid, accept) {
     const myUpdate = { friendRequestsIn:   firebase.firestore.FieldValue.arrayRemove(fromUid) };
     const thUpdate = { friendRequestsSent: firebase.firestore.FieldValue.arrayRemove(me.id) };
@@ -1771,9 +1651,6 @@ window.toggleBlock = async () => {
     bb.disabled = false;
 };
 
-// ════════════════════════════════════════════════════════════════════════
-// SETTINGS
-// ════════════════════════════════════════════════════════════════════════
 
 window.switchSettingsTab = tab => {
     const tabs = ['profile', 'following', 'friends', 'blocked', 'account'];
@@ -1792,7 +1669,6 @@ function renderSettingsFollowing() {
     list.innerHTML = '';
     const following = me?.following || [];
 
-    // Search bar
     const si = document.createElement('input');
     si.type = 'text'; si.placeholder = 'Search following...';
     si.style.cssText = 'width:100%;padding:7px 12px;border-radius:8px;font-size:0.85rem;margin:0 0 10px;';
@@ -1831,7 +1707,6 @@ function renderSettingsFriends() {
     reqsContainer.innerHTML = "";
     list.innerHTML          = "";
 
-    // Incoming requests
     const reqs = (me?.friendRequestsIn || []).filter(uid => allUsers[uid]);
     if (reqs.length) {
         const hdr = document.createElement('p');
@@ -1879,7 +1754,6 @@ function renderSettingsFriends() {
         reqsContainer.appendChild(divider);
     }
 
-    // Friends list
     const friends = (me?.friends || []).filter(uid => allUsers[uid]);
     const fhdr    = document.createElement('p');
     fhdr.style.cssText = "font-size:0.8rem; font-weight:700; color:var(--text); margin:0 0 10px;";
@@ -1894,7 +1768,6 @@ function renderSettingsFriends() {
         return;
     }
 
-    // Search bar for friends
     const sfInp = document.createElement('input');
     sfInp.type = 'text'; sfInp.placeholder = 'Search friends...';
     sfInp.style.cssText = 'width:100%;padding:7px 12px;border-radius:8px;font-size:0.85rem;margin:0 0 10px;';
@@ -2025,8 +1898,6 @@ window.saveMyProfile = async () => {
     }
 };
 
-// ── Profile photo upload via Cloudinary ───────────────────────────────────
-// BUG FIX #4: was storing full base64 in Firestore (1MB limit issue)
 window.handlePfpUpload = async e => {
     const file = e.target.files[0];
     if (!file || !me) return;
@@ -2046,10 +1917,8 @@ window.handlePfpUpload = async e => {
 
     try {
         const photoURL = await uploadToCloudinary(file);
-        // Show preview immediately
         document.getElementById('settings-pfp-preview').innerHTML =
             `<img src="${photoURL}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
-        // Save the Cloudinary URL (not base64) to Firestore
         await db.collection("users").doc(me.id).update({ photoURL });
         document.getElementById('remove-pfp-btn').classList.remove('hidden');
         showMsg('profile-msg', "Profile photo updated!", "success");
@@ -2075,7 +1944,6 @@ window.removePfp = async () => {
     }
 };
 
-// ── Change password ───────────────────────────────────────────────────────
 window.handlePasswordChange = async () => {
     clearMsg('pass-msg');
     const oldP = document.getElementById('old-pass').value;
@@ -2095,7 +1963,6 @@ window.handlePasswordChange = async () => {
     }
 };
 
-// ── Change own email ──────────────────────────────────────────────────────
 window.openChangeEmailModal = () => {
     ['ce-new-email', 'ce-confirm-email', 'ce-password'].forEach(id => {
         document.getElementById(id).value = '';
@@ -2146,7 +2013,6 @@ window.confirmChangeEmail = async () => {
     if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') confirmChangeEmail(); });
 });
 
-// ── Deactivate own account ────────────────────────────────────────────────
 window.openDeactivateModal = () => {
     document.getElementById('deactivate-confirm-pass').value  = '';
     document.getElementById('confirm-deactivate-msg').textContent = '';
@@ -2206,9 +2072,6 @@ window.confirmDeactivateAccount = async () => {
     }
 };
 
-// ════════════════════════════════════════════════════════════════════════
-// LOGIN / SIGNUP
-// ════════════════════════════════════════════════════════════════════════
 
 let isSignup = false;
 
@@ -2328,7 +2191,6 @@ window.sendPasswordReset = async () => {
     });
 });
 
-// ── Resend email verification ─────────────────────────────────────────────
 window.resendVerification = async () => {
     const btn = document.getElementById('resend-verify-btn');
     btn.disabled    = true;
@@ -2343,9 +2205,6 @@ window.resendVerification = async () => {
     }
 };
 
-// ════════════════════════════════════════════════════════════════════════
-// ADMIN PANEL
-// ════════════════════════════════════════════════════════════════════════
 
 window.openAdminModal = () => {
     document.getElementById('admin-search').value = "";
@@ -2367,7 +2226,6 @@ function buildAdminRow(uid) {
     row.dataset.uid  = uid;
     row.dataset.name = (u.displayName || "").toLowerCase();
 
-    // Top: name + status badges
     const top = document.createElement('div');
     top.className = "admin-row-top";
 
@@ -2430,7 +2288,6 @@ function buildAdminRow(uid) {
     }
     row.appendChild(top);
 
-    // UID — click to copy
     const uidEl = document.createElement('code');
     uidEl.className = "admin-row-uid";
     uidEl.title     = "Click to copy UID";
@@ -2444,11 +2301,9 @@ function buildAdminRow(uid) {
     };
     row.appendChild(uidEl);
 
-    // Action buttons
     const btns = document.createElement('div');
     btns.className = "admin-row-btns";
 
-    // Verify / Unverify
     const vBtn = document.createElement('button');
     vBtn.className  = "btn-sm";
     vBtn.textContent = u.verified ? "Unverify" : "Verify";
@@ -2456,7 +2311,6 @@ function buildAdminRow(uid) {
     btns.appendChild(vBtn);
 
     if (uid !== me?.id) {
-        // Make / Remove Admin
         const aBtn = document.createElement('button');
         aBtn.className  = "btn-sm btn-admin";
         aBtn.textContent = u.rank === "Admin" ? "Remove Admin" : "Make Admin";
@@ -2467,7 +2321,6 @@ function buildAdminRow(uid) {
         );
         btns.appendChild(aBtn);
 
-        // Set custom rank
         const crBtn = document.createElement('button');
         crBtn.className   = "btn-sm";
         crBtn.style.cssText = "background:rgba(168,85,247,0.2); color:#c084fc; border:1px solid #c084fc;";
@@ -2475,7 +2328,6 @@ function buildAdminRow(uid) {
         crBtn.onclick = () => showCustomRankDialog(uid, u.displayName, u.rank || "User");
         btns.appendChild(crBtn);
 
-        // Ban / Unban
         const msgBtn = document.createElement('button');
         msgBtn.className = "btn-sm";
         msgBtn.style.cssText = "background:rgba(56,189,248,0.15);color:var(--primary);border:1px solid var(--primary);";
@@ -2515,7 +2367,6 @@ function buildAdminRow(uid) {
         }
         btns.appendChild(bBtn);
 
-        // Deactivate / Reactivate
         if (!isAdminUID(uid)) {
             const dBtn = document.createElement('button');
             dBtn.className    = "btn-sm btn-danger";
@@ -2532,7 +2383,6 @@ function buildAdminRow(uid) {
             btns.appendChild(dBtn);
         }
 
-        // Wipe all posts
         const wipeBtn = document.createElement('button');
         wipeBtn.className    = "btn-sm btn-danger";
         wipeBtn.style.opacity = "0.7";
@@ -2540,7 +2390,6 @@ function buildAdminRow(uid) {
         wipeBtn.onclick = () => adminWipePosts(uid, u.displayName, wipeBtn);
         btns.appendChild(wipeBtn);
 
-        // Change / Cancel Email
         const emailBtn = document.createElement('button');
         emailBtn.className = "btn-sm btn-ghost";
         if (u.pendingEmail) {
@@ -2575,7 +2424,6 @@ function buildAdminRow(uid) {
     return row;
 }
 
-// ── Custom rank dialog ────────────────────────────────────────────────────
 function showCustomRankDialog(uid, displayName, currentRank) {
     document.getElementById('rank-dialog')?.remove();
 
@@ -2670,7 +2518,6 @@ function showCustomRankDialog(uid, displayName, currentRank) {
     }
 }
 
-// ── Admin: change email dialog ────────────────────────────────────────────
 function showChangeEmailDialog(uid, displayName) {
     document.getElementById('email-change-dialog')?.remove();
 
@@ -2776,7 +2623,6 @@ function showChangeEmailDialog(uid, displayName) {
     }
 }
 
-// ── Admin: wipe all posts ─────────────────────────────────────────────────
 async function adminWipePosts(uid, displayName, btn) {
     const userPosts = allPosts.filter(p => p.authorUid === uid);
     if (!userPosts.length) {
@@ -2819,7 +2665,6 @@ async function adminWipePosts(uid, displayName, btn) {
     }
 }
 
-// ── Admin: deactivate account ─────────────────────────────────────────────
 async function adminDeactivate(uid, displayName, btn) {
     if (isAdminUID(uid)) {
         showAlert("The bootstrap admin account cannot be deactivated.");
@@ -2854,7 +2699,6 @@ async function adminDeactivate(uid, displayName, btn) {
     }
 }
 
-// ── Admin: ban duration dialog ────────────────────────────────────────────
 function showBanDialog(displayName) {
     return new Promise(resolve => {
         document.getElementById('ban-dialog')?.remove();
@@ -2890,7 +2734,6 @@ function showBanDialog(displayName) {
         overlay.appendChild(box);
         document.body.appendChild(overlay);
 
-        // Step 2: ask for a reason then resolve
         function askReason(duration) {
             box.innerHTML = `
                 <h3 style="margin:0 0 6px;">Ban ${displayName}</h3>
@@ -2950,13 +2793,11 @@ function showBanDialog(displayName) {
     });
 }
 
-// ── Admin: generic field update ───────────────────────────────────────────
 async function adminAction(uid, update, btn, successLabel) {
     btn.disabled    = true;
     btn.textContent = "...";
     try {
         await db.collection("users").doc(uid).update(update);
-        // Re-fetch instead of spreading FieldValue sentinels like FieldValue.delete()
         const fresh = await db.collection("users").doc(uid).get();
         if (fresh.exists) allUsers[uid] = fresh.data();
         btn.textContent = successLabel;
@@ -2975,7 +2816,6 @@ async function adminAction(uid, update, btn, successLabel) {
     }
 }
 
-// ── Admin: search / filter ────────────────────────────────────────────────
 window.filterAdminUsers = () => {
     const q = document.getElementById('admin-search').value.toLowerCase().trim();
     let count = 0;
@@ -2989,7 +2829,6 @@ window.filterAdminUsers = () => {
     document.getElementById('admin-no-results').style.display = count === 0 ? "block" : "none";
 };
 
-// ── Viewers modal ─────────────────────────────────────────────────────────
 window.openViewersModal = (postId, viewUids) => {
     const list = document.getElementById('viewers-list');
     list.innerHTML = "";
@@ -3013,9 +2852,6 @@ window.openViewersModal = (postId, viewUids) => {
     openModal('viewers-modal');
 };
 
-// ═══════════════════════════════════════════════════════════════════════
-// OWN PROFILE + MENU USER ROW
-// ═══════════════════════════════════════════════════════════════════════
 window.openOwnProfile = () => { if (me) openProfile(me.id); };
 
 function updateMenuUserRow() {
@@ -3029,9 +2865,6 @@ function updateMenuUserRow() {
     renderAvatarEl(av, me);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// PERSONAL MESSAGES / NOTIFICATIONS
-// ═══════════════════════════════════════════════════════════════════════
 function dmConvId(a, b) { return [a, b].sort().join('_'); }
 
 function startDMBadgeListener(uid) {
@@ -3051,7 +2884,6 @@ function startDMBadgeListener(uid) {
 
 window.openInbox = () => {
     if (!me) { openModal('auth-modal'); return; }
-    // Mail icon is in index.html, this is the JS handler
     document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
     document.getElementById('overlay').style.display = 'block';
     document.getElementById('inbox-modal').style.display = 'block';
@@ -3061,7 +2893,6 @@ window.openInbox = () => {
 function renderInbox() {
     const list = document.getElementById('inbox-list');
     list.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;padding:10px 0;">Loading...</p>';
-    // No .orderBy - needs composite index. Sort client-side.
     db.collection('directMessages').where('participants', 'array-contains', me.id).get()
       .then(snap => {
             list.innerHTML = '';
@@ -3095,10 +2926,6 @@ function renderInbox() {
                 pv.style.cssText = 'font-size:0.75rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
                 pv.textContent = (d.lastMessageText||'').slice(0,60)||'...';
                 info.appendChild(nl); info.appendChild(pv); row.appendChild(info);
-                // Delete conversation button.
-                // Both participants must agree before deletion happens.
-                // Pressing the button writes a request to the conv doc.
-                // When both have requested, the conversation is deleted.
                 const deleteReqs    = d.deleteRequest || {};
                 const iRequested    = !!deleteReqs[me.id];
                 const theyRequested = otherUid && !!deleteReqs[otherUid];
@@ -3108,17 +2935,14 @@ function renderInbox() {
 
                 function applyDelBtnState() {
                     if (theyRequested && !iRequested) {
-                        // Other person requested -- show warning so I can agree
                         delBtn.textContent = '\u26A0\uFE0F Agree?';
                         delBtn.title       = (other.displayName || 'Other person') + ' wants to delete this. Click to agree.';
                         delBtn.style.cssText = 'color:var(--danger);border-color:var(--danger);opacity:1;flex-shrink:0;';
                     } else if (iRequested) {
-                        // I already requested -- show pending, allow cancel
                         delBtn.textContent = '\u23F3 Pending';
                         delBtn.title       = 'Waiting for ' + (other.displayName||'other person') + ' to agree. Click to cancel.';
                         delBtn.style.cssText = 'color:#fbbf24;border-color:#fbbf24;opacity:1;flex-shrink:0;';
                     } else {
-                        // No request yet
                         delBtn.textContent = '\u{1F5D1}';
                         delBtn.title       = 'Request to delete this conversation';
                         delBtn.style.cssText = '';
@@ -3136,7 +2960,6 @@ function renderInbox() {
                         const theyReq   = otherUid && !!freshReqs[otherUid];
 
                         if (iReq) {
-                            // Cancel my pending request
                             if (!await showConfirm('Cancel your delete request?')) { delBtn.disabled=false; return; }
                             await db.collection('directMessages').doc(convId).update({
                                 ['deleteRequest.' + me.id]: firebase.firestore.FieldValue.delete()
@@ -3144,7 +2967,6 @@ function renderInbox() {
                             delBtn.textContent   = '\u{1F5D1}';
                             delBtn.style.cssText = '';
                         } else if (theyReq) {
-                            // Other person already requested -- agree to delete
                             if (!await showConfirm(
                                 (other.displayName||'The other person') + ' has requested to delete this conversation.\n\nDo you agree? This cannot be undone.'
                             )) { delBtn.disabled=false; return; }
@@ -3153,7 +2975,6 @@ function renderInbox() {
                             if (!list.querySelector('.dm-inbox-row')) list.innerHTML = '<div class="empty-tab" style="padding:28px 0;">No messages yet.</div>';
                             return;
                         } else {
-                            // Nobody requested yet -- send my request
                             if (!await showConfirm(
                                 'Request to delete this conversation?\n\n'
                                 + (other.displayName||'The other person') + ' will also need to agree before it is permanently deleted.'
@@ -3241,8 +3062,6 @@ function loadDMMessages(uid) {
         });
 }
 
-// PERMISSION FIX: use .add() for msgs (not batch.set which is CREATE-only for non-admin)
-// and .set({...},{merge:true}) for conv metadata (works as UPDATE for participants).
 window.sendDM = async () => {
     if (!me || !activeDMUid) return;
     const input = document.getElementById('dm-input'), text = input.value.trim();
@@ -3284,11 +3103,6 @@ window.adminSendNotification = async (targetUid, displayName) => {
     } catch(e) { showAlert('Failed: ' + e.message); }
 };
 
-// ================================================================
-// Delete a full conversation and all its messages.
-// Firestore does NOT cascade-delete subcollections automatically,
-// so we must delete all msgs first, then the conversation doc.
-// ================================================================
 async function deleteConversationAndMessages(convId) {
     const convRef  = db.collection('directMessages').doc(convId);
     const msgsSnap = await convRef.collection('msgs').get();
@@ -3304,3 +3118,7 @@ async function deleteConversationAndMessages(convId) {
     }
     await convRef.delete();
 }
+
+setTimeout(() => {
+    closeModal('loading-modal');
+}, 2100);
