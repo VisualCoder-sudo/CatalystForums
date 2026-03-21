@@ -14,6 +14,8 @@
 </head>
 <body>
 
+    <div id="loading-modal" class="modal" style="display: list-item;"> <p style="justify-content: center; text-align: center; font-size: xx-large;">Please Wait...</p><progress style="display: flex; justify-content: center; align-items: center; width: 100%;"></progress></div>
+
 <nav class="TNB">
     <div class="logo">Catalyst</div>
 
@@ -373,7 +375,7 @@
 
 <div id="inbox-modal" class="modal" style="display:none; max-width:400px;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
-        <h3 style="margin:0;">&#128140; Messages</h3>
+        <h3 style="margin:0;"><img src="https://i.postimg.cc/y8SmTY7y/icons8-mail-100.png" class="menu-icon">Messages</h3>
         <span onclick="closeAll()" style="cursor:pointer; font-size:1.4rem; color:var(--muted);">&times;</span>
     </div>
     <div id="inbox-list" style="max-height:400px; overflow-y:auto;"></div>
@@ -450,24 +452,28 @@
 
 <div id="news-modal" class="modal" style="max-width:460px;">
     <p style="opacity:0.4; width:auto;">If nothing appears here, check the official Catalyst Forums account!</p>
-    <hr>
-    <p style="font-size:large;">Update 1.1</p>
-    <p style="font-size:small;">- Images now upload via Cloudinary (no more 1MB Firestore limit!)</p>
-    <p style="font-size:small;">- Numerous bug fixes (media removal, nav username, log out, empty feed message)</p>
-    <p style="font-size:large;">Update 1.0 (Complete)</p>
+    <p style="font-size:large;">Update 1.2 (Mostly Complete) March 21, 2026</p>
+    <p style="font-size:small;">- Added ability to upload Videos (Up to 60 Seconds)</p>
+    <p style="font-size:small;">- A new post button appears when you scroll so you dont have to scroll all the way back up to post</p>
+    <p style="font-size:small;">- Revamped UI</p>
+    <p style="font-size:small;">- Added Messages Feature [BETA]</p>
+    <p style="font-size:small;">- Added the ability to search posts alongside accounts</p>
+    <p style="font-size:small;">- Fixed Many bugs</p><hr>
+    <p style="font-size:large;">Update 1.1 (Complete) March 14, 2026</p>
+    <p style="font-size:small;">- Images now have higher resolution</p>
+    <p style="font-size:small;">- Many bug fixes and performance improvements</p><hr>
+    <p style="font-size:large;">Update 1.0 (Complete) March 9, 2026</p>
     <p style="font-size:small;">- All pop ups have been moved to the bottom left corner</p>
 </div>
 
 <script src="J.js"></script>
 
-<!-- ── Floating quick-post button (visible when post-creator is scrolled out of view) ── -->
 <button id="quick-post-fab" onclick="openQuickPost()" title="New post" class="Quick-Post-FAB">
     ✎
 </button>
 
-<!-- ── Quick-post popup (compact version of the post creator) ── -->
 <div id="quick-post-popup"
-    style="display:none;position:fixed;bottom:80px;right:20px;z-index:900;
+    style="display:none;position:fixed;bottom:80px;left:20px;z-index:900;
            width:min(420px,calc(100vw - 32px));
            background:rgba(14,18,32,0.95);backdrop-filter:blur(28px);
            border:1px solid rgba(255,255,255,0.14);border-radius:16px;
@@ -487,7 +493,7 @@
             <button id="quick-attach-btn" onclick="document.getElementById('quick-post-media').click()"
                 style="font-size:0.8rem;padding:6px 10px;background:transparent;
                        border:1px solid var(--border);color:var(--muted);border-radius:6px;">
-                📎 Image
+                Attach Media
             </button>
         </div>
         <button onclick="submitQuickPost()"
