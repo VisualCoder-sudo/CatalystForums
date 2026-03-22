@@ -61,7 +61,7 @@ input[type="file"]{display:none}
 .author-btn{color:var(--primary);font-weight:700;cursor:pointer;font-size:.95rem}
 .author-btn:hover{text-decoration:underline}
 .v-check{color:var(--verified);font-size:.85rem}
-.post-text{margin:0 0 10px;line-height:1.6;word-break:break-word}
+.post-text{margin:0 0 10px;line-height:1.6;word-break:break-word; font-family: Arial, Helvetica, sans-serif;}
 .post-actions{display:flex;gap:14px;font-size:.78rem;color:var(--muted);align-items:center}
 .post-actions span{cursor:pointer;transition:color .15s}
 .post-actions span:hover{color:var(--text)}
