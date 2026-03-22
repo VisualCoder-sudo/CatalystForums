@@ -182,6 +182,7 @@
         <div class="settings-tab"        onclick="switchSettingsTab('friends')" id="friends-tab-btn">Friends</div>
         <div class="settings-tab"        onclick="switchSettingsTab('blocked')">Blocked</div>
         <div class="settings-tab"        onclick="switchSettingsTab('account')">Account</div>
+        <div class="settings-tab"        onclick="switchSettingsTab('sessions')">Sessions</div>
     </div>
 
     <div class="settings-pane active" id="spane-profile">
@@ -252,6 +253,18 @@
             Deactivate Account
         </button>
     </div>
+    <div class="settings-pane" id="spane-sessions">
+        <p style="font-size:0.8rem;color:var(--muted);margin:0 0 12px;">
+            Devices and browsers where your account is signed in.
+            You can remotely sign out any session that isn't you.
+        </p>
+        <button onclick="openSessionsManagerInline()"
+                style="width:100%;margin-bottom:12px;">
+            &#x1F504; Refresh
+        </button>
+        <div id="sessions-list-inline"></div>
+    </div>
+
 </div>
 
 <div id="profile-modal" class="modal" style="max-width:500px;">
@@ -446,6 +459,24 @@
         <img src="https://i.postimg.cc/TPYdnTPF/efres-1-removebg-preview.png" class="menu-icon"> News
     </div>
     <p></p>
+
+    <!-- Notifications entry -->
+    <div class="menu-option" onclick="toggleSidebarNotifications()" style="position:relative;">
+        &#x1F514; Notifications
+        <span id="notif-badge"
+              style="display:none;position:absolute;top:8px;right:10px;
+                     background:var(--danger);color:white;font-size:0.6rem;
+                     font-weight:800;padding:1px 5px;border-radius:10px;
+                     min-width:16px;text-align:center;"></span>
+    </div>
+    <!-- Notification panel — expands inline inside the sidebar -->
+    <div id="sidebar-notif-panel" style="display:none;">
+        <div id="sidebar-notif-list"
+             style="max-height:260px;overflow-y:auto;margin-top:6px;
+                    border-top:1px solid var(--border);padding-top:8px;">
+        </div>
+    </div>
+    <p></p>
 </div>
 
 <div id="news-modal" class="modal" style="max-width:460px;">
@@ -484,9 +515,6 @@
     <textarea id="quick-post-body" placeholder="Say something!"
         style="width:100%;min-height:90px;resize:vertical;border-radius:10px;
                padding:10px 12px;font-size:0.9rem;margin-bottom:10px;"></textarea>
-    <div id="quick-post-media-preview"
-         style="display:none;flex-wrap:wrap;gap:8px;margin-bottom:10px;"></div>
-
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
         <div style="display:flex;gap:8px;align-items:center;">
             <input type="file" id="quick-post-media" accept="image/*,video/*" multiple
@@ -503,5 +531,6 @@
         </button>
     </div>
 </div>
+
 </body>
 </html>
