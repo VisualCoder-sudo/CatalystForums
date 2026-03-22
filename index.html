@@ -254,11 +254,8 @@
         </button>
     </div>
     <div class="settings-pane" id="spane-sessions">
-        <p style="font-size:.8rem;color:var(--muted);margin:0 0 12px;">
-            Devices where your account is signed in.
-            Remotely sign out any session that is not you.
-        </p>
-        <button onclick="openSessionsManagerInline()" style="width:100%;margin-bottom:12px;">&#x1F504; Refresh</button>
+        <p style="font-size:.8rem;color:var(--muted);margin:0 0 12px;">Devices where your account is signed in.</p>
+        <button onclick="window.openSessionsManagerInline()" style="width:100%;margin-bottom:12px;">&#x1F504; Refresh</button>
         <div id="sessions-list-inline"></div>
     </div>
 
@@ -269,7 +266,7 @@
         <h3 style="margin:0;">&#x1F514; Notifications</h3>
         <button onclick="closeAll()" style="background:transparent;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;">&#x2715;</button>
     </div>
-    <input id="notif-search" type="text" placeholder="Search notifications..." oninput="filterNotifications()" style="margin-bottom:12px;">
+    <input id="notif-search" type="text" placeholder="Search notifications..." oninput="window.filterNotifications()" style="margin-bottom:12px;">
     <div id="notif-list" style="max-height:420px;overflow-y:auto;"></div>
 </div>
 
@@ -466,13 +463,9 @@
     </div>
     <p></p>
 
-    <div class="menu-option" onclick="closeAll(); openNotifications()" style="position:relative;">
+    <div class="menu-option" onclick="closeAll(); window.openNotifications()" style="position:relative;">
         &#x1F514; Notifications
-        <span id="notif-badge"
-              style="display:none;position:absolute;top:8px;right:10px;
-                     background:var(--danger);color:white;font-size:0.6rem;
-                     font-weight:800;padding:1px 5px;border-radius:10px;min-width:16px;text-align:center;">
-        </span>
+        <span id="notif-badge" style="display:none;position:absolute;top:8px;right:10px;background:var(--danger);color:white;font-size:0.6rem;font-weight:800;padding:1px 5px;border-radius:10px;min-width:16px;text-align:center;"></span>
     </div>
     <p></p>
 </div>
