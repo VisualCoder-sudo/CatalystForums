@@ -38,65 +38,10 @@ let activeDMUid     = null;
 let dmMessagesUnsub = null;
 let replyMediaQueue = {};
 
-window._debugLog = [];
-
-function _dbg(source, message, detail) {
-    const entry = { t: new Date().toLocaleTimeString(), source: String(source), message: String(message||""), detail: String(detail||"") };
-    window._debugLog.unshift(entry);
-    if (window._debugLog.length > 20) window._debugLog.pop();
-    const panel = document.getElementById("_debug-panel");
-    if (panel && panel.style.display !== "none") _renderDebugPanel();
-}
-
-function _renderDebugPanel() {
-    const body = document.getElementById("_debug-body");
-    if (!body) return;
-    if (!window._debugLog.length) { body.innerHTML = '<div style="color:#475569;padding:8px 0;font-size:0.75rem;">No errors yet.</div>'; return; }
-    body.innerHTML = window._debugLog.map(e =>
-        '<div style="border-bottom:1px solid #1e293b;padding:5px 0;">'
-        + '<span style="color:#fbbf24;font-size:0.7rem;">' + e.t + '</span> '
-        + '<span style="color:#f87171;font-size:0.72rem;">' + e.source + '</span> '
-        + '<span style="color:#e2e8f0;font-size:0.72rem;">' + e.message + '</span>'
-        + (e.detail ? '<div style="color:#94a3b8;font-size:0.68rem;padding-left:8px;">' + e.detail + '</div>' : "")
-        + '</div>'
-    ).join("");
-}
-
-window.toggleDebugPanel = function() {
-    let panel = document.getElementById("_debug-panel");
-    if (!panel) {
-        panel = document.createElement("div");
-        panel.id = "_debug-panel";
-        panel.style.cssText = "position:fixed;bottom:0;left:0;right:0;max-height:45vh;overflow-y:auto;background:rgba(2,6,23,0.97);backdrop-filter:blur(10px);border-top:2px solid #f87171;padding:12px 16px;z-index:9999;font-family:monospace;";
-        panel.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
-            + '<span style="font-weight:700;font-size:0.78rem;color:#f87171;">&#x1F41B; DEBUG LOG &mdash; Ctrl+Shift+D to close</span>'
-            + '<button onclick="toggleDebugPanel()" style="background:transparent;border:none;color:#94a3b8;cursor:pointer;font-size:0.85rem;">&#x2715; Close</button>'
-            + '</div><div id="_debug-body"></div>';
-        document.body.appendChild(panel);
-        _renderDebugPanel();
-    } else {
-        panel.style.display = panel.style.display === "none" ? "" : "none";
-        if (panel.style.display !== "none") _renderDebugPanel();
-    }
-};
-
-document.addEventListener("keydown", e => {
-    if (e.ctrlKey && e.shiftKey && e.key === "D") { e.preventDefault(); toggleDebugPanel(); }
-});
-
 window.onerror = (message, source, lineno, colno, error) => {
-    if (typeof message === "string" && message.includes("ResizeObserver")) return true;
-    console.error("Unhandled JS error:", message, source, lineno, colno, error);
-    _dbg("window.onerror", message, source + ":" + lineno + ":" + colno);
+    if (typeof message === 'string' && message.includes('ResizeObserver')) return true;
+    console.error('Unhandled JS error:', message, source, lineno, colno, error);
     return false;
-};
-
-window.onunhandledrejection = event => {
-    const r = event.reason;
-    const msg = r && r.message ? r.message : String(r);
-    const code = r && r.code ? r.code : "";
-    console.error("Unhandled rejection:", r);
-    _dbg("Promise.reject", msg, code);
 };
 
 
@@ -168,7 +113,6 @@ window.submitQuickPost = async function() {
     await submitPost();
     if (!mainBody.value) {
         ta.value = '';
-        renderQuickPostPreview();
         closeQuickPost();
     } else {
         mainBody.value = originalValue;
@@ -177,47 +121,7 @@ window.submitQuickPost = async function() {
 
 window.handleQuickPostMedia = function(input) {
     handlePostMedia(input);
-    setTimeout(renderQuickPostPreview, 120);
 };
-
-function renderQuickPostPreview() {
-    const qp = document.getElementById("quick-post-media-preview");
-    if (!qp) return;
-    qp.innerHTML = "";
-    if (!postMedia.length) { qp.style.display = "none"; return; }
-    qp.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;";
-    postMedia.forEach((media, index) => {
-        const isVideo = media.mimeType.startsWith("video/");
-        const wrap = document.createElement("div");
-        wrap.style.cssText = isVideo ? "position:relative;width:110px;height:65px;" : "position:relative;width:65px;height:65px;";
-        if (isVideo) {
-            const vid = document.createElement("video");
-            vid.src = media.localUrl; vid.muted = true;
-            vid.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:7px;border:1px solid var(--primary);";
-            const play = document.createElement("div");
-            play.textContent = "\u25b6";
-            play.style.cssText = "position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:white;font-size:1.1rem;pointer-events:none;text-shadow:0 0 6px rgba(0,0,0,0.8);";
-            wrap.appendChild(vid); wrap.appendChild(play);
-        } else {
-            const img = document.createElement("img");
-            img.src = media.localUrl;
-            img.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:7px;border:1px solid var(--primary);";
-            wrap.appendChild(img);
-        }
-        const rm = document.createElement("button");
-        rm.type = "button"; rm.innerHTML = "&times;";
-        rm.style.cssText = "position:absolute;top:-5px;right:-5px;width:18px;height:18px;min-width:0;padding:0;font-size:12px;background:#ff4d4d;border:none;border-radius:50%;color:white;cursor:pointer;z-index:1;";
-        rm.onclick = e => {
-            e.preventDefault(); e.stopPropagation();
-            URL.revokeObjectURL(media.localUrl);
-            postMedia.splice(index, 1);
-            renderMediaPreviews();
-            renderQuickPostPreview();
-        };
-        wrap.appendChild(rm);
-        qp.appendChild(wrap);
-    });
-}
 
 
 window.togglePassVis = function(inputId, btn) {
@@ -691,6 +595,30 @@ auth.onAuthStateChanged(async user => {
         if (Object.keys(upd).length) await ref.update(upd);
     }
 
+    const _sid = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+    window._sessionId = _sid;
+    const _ua = navigator.userAgent;
+    const _br = _ua.includes('Firefox') ? 'Firefox' : _ua.includes('Edg') ? 'Edge'
+              : _ua.includes('Chrome') ? 'Chrome' : _ua.includes('Safari') ? 'Safari' : 'Browser';
+    const _os = _ua.includes('Android') ? 'Android' : _ua.includes('iPhone')||_ua.includes('iPad') ? 'iOS'
+              : _ua.includes('Windows') ? 'Windows' : _ua.includes('Mac') ? 'macOS'
+              : _ua.includes('Linux') ? 'Linux' : 'Unknown';
+    db.collection('users').doc(user.uid).collection('sessions').doc(_sid).set({
+        browser: _br, os: _os,
+        loginAt:  firebase.firestore.FieldValue.serverTimestamp(),
+        lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
+        revoked:  false
+    }).catch(() => {});
+    setInterval(() => {
+        db.collection('users').doc(user.uid).collection('sessions').doc(_sid)
+            .update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+    }, 5 * 60 * 1000);
+    // Watch for remote revocation — sign out automatically if another device revokes us
+    db.collection('users').doc(user.uid).collection('sessions').doc(_sid)
+        .onSnapshot(snap => {
+            if (snap.exists && snap.data().revoked) auth.signOut().then(() => location.reload());
+        }, () => {});
+
     ref.onSnapshot(doc => {
         if (!doc.exists) return;
         const data = doc.data();
@@ -751,6 +679,7 @@ auth.onAuthStateChanged(async user => {
         }
 
         startDMBadgeListener(user.uid);
+        startNotificationListener(user.uid);
         updateMenuUserRow();
         renderFeed();
     });
@@ -846,6 +775,59 @@ function renderFeed() {
     }
 }
 
+// Parse @Username tokens in post text and render as clickable profile links.
+// Uses text nodes — never innerHTML — so no user content reaches the DOM as HTML.
+function renderMentions(container, text) {
+    if (!text) return;
+    const parts = text.split(/(@[\w\-]{1,32})/g);
+    parts.forEach(part => {
+        if (/^@[\w\-]{1,32}$/.test(part)) {
+            const name = part.slice(1).toLowerCase();
+            const uid  = Object.keys(allUsers).find(
+                u => (allUsers[u].displayName || '').toLowerCase() === name
+            );
+            if (uid) {
+                const span = document.createElement('span');
+                span.className   = 'mention';
+                span.textContent = part;
+                span.onclick = e => { e.stopPropagation(); openProfile(uid); };
+                container.appendChild(span);
+                return;
+            }
+        }
+        container.appendChild(document.createTextNode(part));
+    });
+}
+
+function extractMentionedUids(text) {
+    if (!text) return [];
+    const uids = [];
+    (text.match(/@[\w\-]{1,32}/g) || []).forEach(m => {
+        const name = m.slice(1).toLowerCase();
+        const uid  = Object.keys(allUsers).find(
+            u => (allUsers[u].displayName || '').toLowerCase() === name
+        );
+        if (uid && uid !== me?.id && !uids.includes(uid)) uids.push(uid);
+    });
+    return uids;
+}
+
+async function sendMentionNotification(mentionedUid, postText) {
+    try {
+        await db.collection('users').doc(mentionedUid)
+            .collection('notifications').add({
+                type:      'mention',
+                fromUid:   me.id,
+                fromName:  me.displayName || 'Someone',
+                preview:   postText.slice(0, 80),
+                read:      false,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+    } catch(e) {
+        console.warn('sendMentionNotification:', e.code, e.message);
+    }
+}
+
 function buildPost(post, depth) {
     const u             = allUsers[post.authorUid] || { displayName: "Deleted User", rank: "User", verified: false };
     const isBan         = u.rank === "Banned";
@@ -934,10 +916,13 @@ function buildPost(post, depth) {
 
     if (post.text && post.text.trim()) {
         const txt = document.createElement('p');
-        txt.className  = "post-text";
-        txt.style.fontFamily = "inherit";
-        txt.textContent = isBan ? "[This user has been banned]" : post.text;
-        if (isBan) txt.style.opacity = "0.4";
+        txt.className = "post-text";
+        if (isBan) {
+            txt.textContent   = "[This user has been banned]";
+            txt.style.opacity = "0.4";
+        } else {
+            renderMentions(txt, post.text);
+        }
         wrap.appendChild(txt);
     }
 
@@ -1195,6 +1180,7 @@ window.submitPost = async () => {
         });
 
         lastPostTime = Date.now();
+        extractMentionedUids(val).forEach(uid => sendMentionNotification(uid, val));
         body.value   = "";
         postMedia.forEach(m => URL.revokeObjectURL(m.localUrl));
         postMedia    = [];
@@ -1202,7 +1188,6 @@ window.submitPost = async () => {
 
     } catch (e) {
         console.error('Post submission error:', e);
-        _dbg('submitPost', e.message, e.code);
         showAlert('Failed to post: ' + e.message);
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = "Post"; }
@@ -1235,6 +1220,7 @@ async function sendReply(parentId, input, wrap) {
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
     }).then(() => {
         lastPostTime = Date.now(); input.value = "";
+        extractMentionedUids(val).forEach(uid => sendMentionNotification(uid, val));
         if (replyMediaQueue[parentId]) {
             replyMediaQueue[parentId].forEach(m => URL.revokeObjectURL(m.localUrl));
             delete replyMediaQueue[parentId];
@@ -1628,7 +1614,6 @@ window.toggleFollow = async () => {
         fb.className = 'btn-follow' + (isFol ? '' : ' following');
     } catch (e) {
         console.error('Follow error:', e.code, e.message);
-        _dbg('toggleFollow', e.message, e.code);
         showAlert('Follow failed (' + (e.code||'unknown') + '): ' + e.message);
     }
     fb.disabled = false;
@@ -1679,7 +1664,6 @@ window.toggleFriendRequest = async () => {
         }
     } catch (e) {
         console.error('Friend request error:', e.code, e.message);
-        _dbg('toggleFriendRequest', e.message, e.code);
         showAlert('Friend request failed (' + (e.code||'unknown') + '): ' + e.message);
     }
     frd.disabled = false;
@@ -1746,7 +1730,6 @@ window.toggleBlock = async () => {
         }
     } catch (e) {
         console.error('Block/Unblock error:', e.code, e.message);
-        _dbg('toggleBlock', e.message, e.code);
         showAlert('Block action failed (' + (e.code||'unknown') + '): ' + e.message);
     }
     bb.disabled = false;
@@ -1754,7 +1737,7 @@ window.toggleBlock = async () => {
 
 
 window.switchSettingsTab = tab => {
-    const tabs = ['profile', 'following', 'friends', 'blocked', 'account'];
+    const tabs = ['profile', 'following', 'friends', 'blocked', 'account', 'sessions'];
     document.querySelectorAll('.settings-tab')
         .forEach((el, i) => el.classList.toggle('active', tabs[i] === tab));
     document.querySelectorAll('.settings-pane')
@@ -1763,6 +1746,7 @@ window.switchSettingsTab = tab => {
     if (tab === 'following') renderSettingsFollowing();
     if (tab === 'friends')   renderSettingsFriends();
     if (tab === 'blocked')   renderSettingsBlocked();
+    if (tab === 'sessions')  openSessionsManagerInline();
 };
 
 function renderSettingsFollowing() {
@@ -2955,6 +2939,140 @@ window.openViewersModal = (postId, viewUids) => {
 
 window.openOwnProfile = () => { if (me) openProfile(me.id); };
 
+function _timeAgo(date) {
+    const d = Math.floor((Date.now() - date) / 1000);
+    if (d < 60)      return 'just now';
+    if (d < 3600)    return Math.floor(d/60) + 'm ago';
+    if (d < 86400)   return Math.floor(d/3600) + 'h ago';
+    if (d < 604800)  return Math.floor(d/86400) + 'd ago';
+    return date.toLocaleDateString();
+}
+
+async function openSessionsManagerInline() {
+    const list = document.getElementById('sessions-list-inline');
+    if (!list || !me) return;
+    list.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;padding:6px 0;">Loading...</p>';
+    try {
+        const snap = await db.collection('users').doc(me.id).collection('sessions')
+            .orderBy('lastSeen', 'desc').limit(20).get();
+        list.innerHTML = '';
+        if (snap.empty) { list.innerHTML = '<div class="empty-tab">No session records yet.</div>'; return; }
+        const osEmoji = { Windows:'🖥', macOS:'🍎', iOS:'📱', Android:'📱', Linux:'🐧' };
+        snap.forEach(doc => {
+            const s = doc.data();
+            if (s.revoked) return;
+            const isCurrent = doc.id === window._sessionId;
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 4px;'
+                + 'border-bottom:1px solid rgba(255,255,255,0.06);'
+                + (isCurrent ? 'background:rgba(56,189,248,0.05);' : '');
+            const icon = document.createElement('div');
+            icon.textContent = osEmoji[s.os] || '💻';
+            icon.style.cssText = 'font-size:1.3rem;flex-shrink:0;';
+            const info = document.createElement('div'); info.style.cssText = 'flex:1;min-width:0;';
+            const top = document.createElement('div');
+            top.style.cssText = 'font-size:0.85rem;font-weight:600;';
+            top.textContent = (s.browser||'') + ' on ' + (s.os||'Unknown');
+            if (isCurrent) {
+                const b = document.createElement('span');
+                b.style.cssText = 'margin-left:7px;font-size:0.68rem;background:rgba(34,197,94,0.15);'
+                    + 'color:var(--success);border:1px solid var(--success);border-radius:4px;padding:1px 5px;';
+                b.textContent = 'This device'; top.appendChild(b);
+            }
+            const sub = document.createElement('div');
+            sub.style.cssText = 'font-size:0.7rem;color:var(--muted);';
+            const ls = s.lastSeen ? (s.lastSeen.toDate ? s.lastSeen.toDate() : new Date(s.lastSeen)) : null;
+            sub.textContent = ls ? 'Last seen ' + _timeAgo(ls) : '';
+            info.appendChild(top); info.appendChild(sub);
+            row.appendChild(icon); row.appendChild(info);
+            if (!isCurrent) {
+                const btn = document.createElement('button');
+                btn.className = 'btn-sm btn-danger'; btn.textContent = 'Sign out';
+                btn.onclick = async () => {
+                    if (!await showConfirm('Sign out this session?')) return;
+                    btn.disabled = true; btn.textContent = '...';
+                    try {
+                        await db.collection('users').doc(me.id).collection('sessions')
+                            .doc(doc.id).update({ revoked: true });
+                        row.style.opacity = '0.35'; btn.textContent = 'Signed out ✓';
+                    } catch(e) {
+                        btn.disabled = false; btn.textContent = 'Sign out';
+                        showAlert('Failed: ' + (e.code||e.message));
+                    }
+                };
+                row.appendChild(btn);
+            }
+            list.appendChild(row);
+        });
+        if (!list.children.length) list.innerHTML = '<div class="empty-tab">No other active sessions.</div>';
+    } catch(e) {
+        list.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;padding:6px 0;">Error: ' + (e.code||e.message) + '</p>';
+    }
+}
+
+
+// Toggle the inline notification panel in the sidebar.
+window.toggleSidebarNotifications = function() {
+    const panel = document.getElementById('sidebar-notif-panel');
+    if (!panel) return;
+    const isOpen = panel.style.display !== 'none';
+    panel.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen) renderSidebarNotifications();
+};
+
+async function renderSidebarNotifications() {
+    if (!me) return;
+    const list = document.getElementById('sidebar-notif-list');
+    if (!list) return;
+    list.innerHTML = '<p style="color:var(--muted);font-size:0.8rem;padding:6px 0;">Loading...</p>';
+    try {
+        const snap = await db.collection('users').doc(me.id)
+            .collection('notifications')
+            .orderBy('createdAt', 'desc')
+            .limit(20).get();
+        list.innerHTML = '';
+        if (snap.empty) {
+            list.innerHTML = '<div class="empty-tab" style="padding:16px 0;font-size:0.82rem;">No notifications yet. You will see @mentions here.</div>';
+            return;
+        }
+        // Mark all as read
+        const batch = db.batch();
+        snap.docs.forEach(d => { if (!d.data().read) batch.update(d.ref, { read: true }); });
+        batch.commit().catch(() => {});
+        snap.forEach(doc => {
+            const n   = doc.data();
+            const row = document.createElement('div');
+            row.className = 'sidebar-notif-row';
+            if (!n.read) row.classList.add('unread');
+            // Header: who mentioned you
+            const top = document.createElement('div');
+            top.style.cssText = 'font-size:0.82rem;font-weight:600;color:var(--text);';
+            top.textContent = '@' + (n.fromName || 'Someone') + ' mentioned you';
+            // Preview snippet
+            const pre = document.createElement('div');
+            pre.style.cssText = 'font-size:0.75rem;color:var(--muted);margin-top:2px;'
+                + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+            pre.textContent = n.preview || '';
+            // Timestamp
+            const ts  = document.createElement('div');
+            ts.style.cssText = 'font-size:0.68rem;color:var(--muted);margin-top:2px;';
+            const d2  = n.createdAt ? (n.createdAt.toDate ? n.createdAt.toDate() : new Date(n.createdAt)) : new Date();
+            const diff = Math.floor((Date.now() - d2) / 1000);
+            ts.textContent = diff < 60 ? 'just now' : diff < 3600 ? Math.floor(diff/60)+'m ago' : diff < 86400 ? Math.floor(diff/3600)+'h ago' : d2.toLocaleDateString();
+            row.appendChild(top); row.appendChild(pre); row.appendChild(ts);
+            // Click to open the mentioner's profile
+            row.onclick = () => {
+                closeAll();
+                if (n.fromUid) openProfile(n.fromUid);
+            };
+            list.appendChild(row);
+        });
+    } catch(e) {
+        list.innerHTML = '<p style="color:var(--danger);font-size:0.78rem;padding:6px 0;">Error: ' + (e.code||e.message) + '</p>';
+    }
+}
+
+
 function updateMenuUserRow() {
     if (!me) return;
     const row   = document.getElementById('menu-user-row');
@@ -2967,6 +3085,22 @@ function updateMenuUserRow() {
 }
 
 function dmConvId(a, b) { return [a, b].sort().join('_'); }
+
+// Watches unread notifications and updates the sidebar badge.
+function startNotificationListener(uid) {
+    if (window._notifStarted) return;
+    window._notifStarted = true;
+    db.collection('users').doc(uid).collection('notifications')
+      .where('read', '==', false)
+      .onSnapshot(snap => {
+            const count = snap.size;
+            const badge = document.getElementById('notif-badge');
+            if (badge) {
+                badge.textContent   = count || '';
+                badge.style.display = count ? 'inline-block' : 'none';
+            }
+      }, err => console.warn('notif listener:', err.code));
+}
 
 function startDMBadgeListener(uid) {
     if (window._dmBadgeStarted) return;
@@ -3089,7 +3223,6 @@ function renderInbox() {
                         }
                     } catch (err) {
                         console.error('Delete convo error:', err.code, err.message);
-                        _dbg('deleteConversation', err.message, err.code);
                         showAlert('Failed: ' + (err.code||err.message));
                     }
                     delBtn.disabled = false;
@@ -3099,7 +3232,6 @@ function renderInbox() {
         })
       .catch(err => {
             console.error('renderInbox:', err.code, err.message);
-            _dbg('renderInbox', err.message, err.code);
             list.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;padding:10px 0;">Error: ' + (err.code||err.message) + '</p>';
         });
 }
@@ -3161,7 +3293,6 @@ function loadDMMessages(uid) {
             c.scrollTop = c.scrollHeight;
         }, err => {
             console.error('loadDMMessages:', err.code, err.message);
-            _dbg('loadDMMessages', err.message, err.code);
             c.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;text-align:center;padding:20px 0;">Error: ' + (err.code||err.message) + '</p>';
         });
 }
@@ -3222,6 +3353,65 @@ async function deleteConversationAndMessages(convId) {
     }
     await convRef.delete();
 }
+
+
+// @mention autocomplete for post textareas
+(function initMentionAC() {
+    function setup(textareaId) {
+        document.addEventListener('DOMContentLoaded', () => {
+            const ta = document.getElementById(textareaId);
+            if (!ta) return;
+            let dd = null;
+            const getQuery = () => {
+                const m = ta.value.slice(0, ta.selectionStart).match(/@([\w\-]*)$/);
+                return m ? m[1] : null;
+            };
+            const removeDd = () => { if (dd) { dd.remove(); dd = null; } };
+            const showDd = q => {
+                removeDd();
+                const matches = Object.keys(allUsers)
+                    .filter(uid => {
+                        const u = allUsers[uid];
+                        return (u.displayName||'').toLowerCase().startsWith(q.toLowerCase())
+                            && !u.deactivated && uid !== me?.id;
+                    }).slice(0, 6);
+                if (!matches.length) return;
+                dd = document.createElement('div');
+                dd.className = 'mention-dropdown';
+                const rect = ta.getBoundingClientRect();
+                dd.style.cssText = 'position:fixed;left:' + rect.left + 'px;top:' + (rect.bottom+4) + 'px;'
+                    + 'width:' + Math.min(rect.width,260) + 'px;max-height:200px;overflow-y:auto;'
+                    + 'background:rgba(14,18,32,0.98);border:1px solid rgba(255,255,255,0.14);'
+                    + 'border-radius:10px;z-index:2000;box-shadow:0 8px 24px rgba(0,0,0,0.5);';
+                matches.forEach(uid => {
+                    const u = allUsers[uid];
+                    const item = document.createElement('div');
+                    item.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:0.85rem;';
+                    item.appendChild(makeSmallAvatar(u));
+                    const nm = document.createElement('span'); nm.textContent = u.displayName;
+                    item.appendChild(nm);
+                    item.onmouseenter = () => item.style.background = 'rgba(56,189,248,0.10)';
+                    item.onmouseleave = () => item.style.background = '';
+                    item.onmousedown = e => {
+                        e.preventDefault();
+                        const pos = ta.selectionStart;
+                        const before = ta.value.slice(0, pos).replace(/@[\w\-]*$/, '@'+u.displayName+' ');
+                        ta.value = before + ta.value.slice(pos);
+                        ta.selectionStart = ta.selectionEnd = before.length;
+                        ta.focus(); removeDd();
+                    };
+                    dd.appendChild(item);
+                });
+                document.body.appendChild(dd);
+            };
+            ta.addEventListener('input', () => { const q = getQuery(); q !== null ? showDd(q) : removeDd(); });
+            ta.addEventListener('keydown', e => { if (e.key === 'Escape') removeDd(); });
+            ta.addEventListener('blur', () => setTimeout(removeDd, 150));
+        });
+    }
+    setup('post-body');
+    setup('quick-post-body');
+})();
 
 setTimeout(() => {
     closeModal('loading-modal');
