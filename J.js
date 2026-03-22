@@ -38,10 +38,65 @@ let activeDMUid     = null;
 let dmMessagesUnsub = null;
 let replyMediaQueue = {};
 
+window._debugLog = [];
+
+function _dbg(source, message, detail) {
+    const entry = { t: new Date().toLocaleTimeString(), source: String(source), message: String(message||""), detail: String(detail||"") };
+    window._debugLog.unshift(entry);
+    if (window._debugLog.length > 20) window._debugLog.pop();
+    const panel = document.getElementById("_debug-panel");
+    if (panel && panel.style.display !== "none") _renderDebugPanel();
+}
+
+function _renderDebugPanel() {
+    const body = document.getElementById("_debug-body");
+    if (!body) return;
+    if (!window._debugLog.length) { body.innerHTML = '<div style="color:#475569;padding:8px 0;font-size:0.75rem;">No errors yet.</div>'; return; }
+    body.innerHTML = window._debugLog.map(e =>
+        '<div style="border-bottom:1px solid #1e293b;padding:5px 0;">'
+        + '<span style="color:#fbbf24;font-size:0.7rem;">' + e.t + '</span> '
+        + '<span style="color:#f87171;font-size:0.72rem;">' + e.source + '</span> '
+        + '<span style="color:#e2e8f0;font-size:0.72rem;">' + e.message + '</span>'
+        + (e.detail ? '<div style="color:#94a3b8;font-size:0.68rem;padding-left:8px;">' + e.detail + '</div>' : "")
+        + '</div>'
+    ).join("");
+}
+
+window.toggleDebugPanel = function() {
+    let panel = document.getElementById("_debug-panel");
+    if (!panel) {
+        panel = document.createElement("div");
+        panel.id = "_debug-panel";
+        panel.style.cssText = "position:fixed;bottom:0;left:0;right:0;max-height:45vh;overflow-y:auto;background:rgba(2,6,23,0.97);backdrop-filter:blur(10px);border-top:2px solid #f87171;padding:12px 16px;z-index:9999;font-family:monospace;";
+        panel.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+            + '<span style="font-weight:700;font-size:0.78rem;color:#f87171;">&#x1F41B; DEBUG LOG &mdash; Ctrl+Shift+D to close</span>'
+            + '<button onclick="toggleDebugPanel()" style="background:transparent;border:none;color:#94a3b8;cursor:pointer;font-size:0.85rem;">&#x2715; Close</button>'
+            + '</div><div id="_debug-body"></div>';
+        document.body.appendChild(panel);
+        _renderDebugPanel();
+    } else {
+        panel.style.display = panel.style.display === "none" ? "" : "none";
+        if (panel.style.display !== "none") _renderDebugPanel();
+    }
+};
+
+document.addEventListener("keydown", e => {
+    if (e.ctrlKey && e.shiftKey && e.key === "D") { e.preventDefault(); toggleDebugPanel(); }
+});
+
 window.onerror = (message, source, lineno, colno, error) => {
-    if (typeof message === 'string' && message.includes('ResizeObserver')) return true;
-    console.error('Unhandled JS error:', message, source, lineno, colno, error);
+    if (typeof message === "string" && message.includes("ResizeObserver")) return true;
+    console.error("Unhandled JS error:", message, source, lineno, colno, error);
+    _dbg("window.onerror", message, source + ":" + lineno + ":" + colno);
     return false;
+};
+
+window.onunhandledrejection = event => {
+    const r = event.reason;
+    const msg = r && r.message ? r.message : String(r);
+    const code = r && r.code ? r.code : "";
+    console.error("Unhandled rejection:", r);
+    _dbg("Promise.reject", msg, code);
 };
 
 
@@ -113,6 +168,7 @@ window.submitQuickPost = async function() {
     await submitPost();
     if (!mainBody.value) {
         ta.value = '';
+        renderQuickPostPreview();
         closeQuickPost();
     } else {
         mainBody.value = originalValue;
@@ -121,7 +177,47 @@ window.submitQuickPost = async function() {
 
 window.handleQuickPostMedia = function(input) {
     handlePostMedia(input);
+    setTimeout(renderQuickPostPreview, 120);
 };
+
+function renderQuickPostPreview() {
+    const qp = document.getElementById("quick-post-media-preview");
+    if (!qp) return;
+    qp.innerHTML = "";
+    if (!postMedia.length) { qp.style.display = "none"; return; }
+    qp.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;";
+    postMedia.forEach((media, index) => {
+        const isVideo = media.mimeType.startsWith("video/");
+        const wrap = document.createElement("div");
+        wrap.style.cssText = isVideo ? "position:relative;width:110px;height:65px;" : "position:relative;width:65px;height:65px;";
+        if (isVideo) {
+            const vid = document.createElement("video");
+            vid.src = media.localUrl; vid.muted = true;
+            vid.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:7px;border:1px solid var(--primary);";
+            const play = document.createElement("div");
+            play.textContent = "\u25b6";
+            play.style.cssText = "position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:white;font-size:1.1rem;pointer-events:none;text-shadow:0 0 6px rgba(0,0,0,0.8);";
+            wrap.appendChild(vid); wrap.appendChild(play);
+        } else {
+            const img = document.createElement("img");
+            img.src = media.localUrl;
+            img.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:7px;border:1px solid var(--primary);";
+            wrap.appendChild(img);
+        }
+        const rm = document.createElement("button");
+        rm.type = "button"; rm.innerHTML = "&times;";
+        rm.style.cssText = "position:absolute;top:-5px;right:-5px;width:18px;height:18px;min-width:0;padding:0;font-size:12px;background:#ff4d4d;border:none;border-radius:50%;color:white;cursor:pointer;z-index:1;";
+        rm.onclick = e => {
+            e.preventDefault(); e.stopPropagation();
+            URL.revokeObjectURL(media.localUrl);
+            postMedia.splice(index, 1);
+            renderMediaPreviews();
+            renderQuickPostPreview();
+        };
+        wrap.appendChild(rm);
+        qp.appendChild(wrap);
+    });
+}
 
 
 window.togglePassVis = function(inputId, btn) {
@@ -145,7 +241,7 @@ async function uploadToCloudinary(file) {
 
     if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.error?.message || `Cloudinary upload failed (${response.status})`);
+        throw new Error(err.error?.message || `Upload failed (${response.status})`);
     }
 
     const data = await response.json();
@@ -273,7 +369,7 @@ function accountOlderThan(createdAt, seconds) {
 const HARD_BLOCKED_WORDS = [
     "nigger", "nigga", "kike", "spic", "chink", "wetback",
     "faggot", "tranny", "nonce", "cock", "rape", "pussy",
-    "rapist", "nazi", "hitler", "dick", "dicks", "penis", "boobs"
+    "rapist", "nazi", "hitler"
 ];
 
 function containsProfanity(text) {
@@ -839,6 +935,7 @@ function buildPost(post, depth) {
     if (post.text && post.text.trim()) {
         const txt = document.createElement('p');
         txt.className  = "post-text";
+        txt.style.fontFamily = "inherit";
         txt.textContent = isBan ? "[This user has been banned]" : post.text;
         if (isBan) txt.style.opacity = "0.4";
         wrap.appendChild(txt);
@@ -1105,6 +1202,7 @@ window.submitPost = async () => {
 
     } catch (e) {
         console.error('Post submission error:', e);
+        _dbg('submitPost', e.message, e.code);
         showAlert('Failed to post: ' + e.message);
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = "Post"; }
@@ -1530,6 +1628,7 @@ window.toggleFollow = async () => {
         fb.className = 'btn-follow' + (isFol ? '' : ' following');
     } catch (e) {
         console.error('Follow error:', e.code, e.message);
+        _dbg('toggleFollow', e.message, e.code);
         showAlert('Follow failed (' + (e.code||'unknown') + '): ' + e.message);
     }
     fb.disabled = false;
@@ -1580,6 +1679,7 @@ window.toggleFriendRequest = async () => {
         }
     } catch (e) {
         console.error('Friend request error:', e.code, e.message);
+        _dbg('toggleFriendRequest', e.message, e.code);
         showAlert('Friend request failed (' + (e.code||'unknown') + '): ' + e.message);
     }
     frd.disabled = false;
@@ -1646,6 +1746,7 @@ window.toggleBlock = async () => {
         }
     } catch (e) {
         console.error('Block/Unblock error:', e.code, e.message);
+        _dbg('toggleBlock', e.message, e.code);
         showAlert('Block action failed (' + (e.code||'unknown') + '): ' + e.message);
     }
     bb.disabled = false;
@@ -1849,9 +1950,9 @@ window.openSettings = () => {
     const ad = document.getElementById('settings-account-age');
     if (ad) {
         if (me && me.createdAt) {
-            ad.textContent = `\uD83D\uDCC5 Account ${formatAccountAge(me.createdAt)}`;
+            ad.textContent = ` Account ${formatAccountAge(me.createdAt)}`;
         } else if (auth.currentUser.metadata?.creationTime) {
-            ad.textContent = `\uD83D\uDCC5 Account ${formatAccountAge(new Date(auth.currentUser.metadata.creationTime))}`;
+            ad.textContent = ` Account ${formatAccountAge(new Date(auth.currentUser.metadata.creationTime))}`;
         } else {
             ad.textContent = "";
         }
@@ -1926,7 +2027,7 @@ window.handlePfpUpload = async e => {
         console.error('PFP upload error:', err);
         showMsg('profile-msg', "Failed to upload photo: " + err.message, "error");
     } finally {
-        if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = "\uD83D\uDCF7 Change Photo"; }
+        if (uploadBtn) { uploadBtn.disabled = false; uploadBtn.textContent = "Change Photo"; }
         e.target.value = "";
     }
 };
@@ -2988,6 +3089,7 @@ function renderInbox() {
                         }
                     } catch (err) {
                         console.error('Delete convo error:', err.code, err.message);
+                        _dbg('deleteConversation', err.message, err.code);
                         showAlert('Failed: ' + (err.code||err.message));
                     }
                     delBtn.disabled = false;
@@ -2997,6 +3099,7 @@ function renderInbox() {
         })
       .catch(err => {
             console.error('renderInbox:', err.code, err.message);
+            _dbg('renderInbox', err.message, err.code);
             list.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;padding:10px 0;">Error: ' + (err.code||err.message) + '</p>';
         });
 }
@@ -3058,6 +3161,7 @@ function loadDMMessages(uid) {
             c.scrollTop = c.scrollHeight;
         }, err => {
             console.error('loadDMMessages:', err.code, err.message);
+            _dbg('loadDMMessages', err.message, err.code);
             c.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;text-align:center;padding:20px 0;">Error: ' + (err.code||err.message) + '</p>';
         });
 }
