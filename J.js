@@ -753,37 +753,48 @@ function renderFeed() {
     }
 }
 
+// Parse @Username tokens and render as clickable spans
 function renderMentions(container, text) {
     if (!text) return;
     text.split(/(@[\w\-]{1,32})/g).forEach(part => {
         if (/^@[\w\-]{1,32}$/.test(part)) {
             const name = part.slice(1).toLowerCase();
-            const uid  = Object.keys(allUsers).find(u => (allUsers[u].displayName || '').toLowerCase() === name);
+            const uid  = Object.keys(allUsers).find(
+                u => (allUsers[u].displayName || '').toLowerCase() === name
+            );
             if (uid) {
                 const sp = document.createElement('span');
-                sp.className = 'mention'; sp.textContent = part;
+                sp.className   = 'mention';
+                sp.textContent = part;
                 sp.onclick = e => { e.stopPropagation(); openProfile(uid); };
-                container.appendChild(sp); return;
+                container.appendChild(sp);
+                return;
             }
         }
         container.appendChild(document.createTextNode(part));
     });
 }
+
 function extractMentionedUids(text) {
     if (!text) return [];
     const uids = [];
     (text.match(/@[\w\-]{1,32}/g) || []).forEach(m => {
         const name = m.slice(1).toLowerCase();
-        const uid  = Object.keys(allUsers).find(u => (allUsers[u].displayName || '').toLowerCase() === name);
+        const uid  = Object.keys(allUsers).find(
+            u => (allUsers[u].displayName || '').toLowerCase() === name
+        );
         if (uid && uid !== me?.id && !uids.includes(uid)) uids.push(uid);
     });
     return uids;
 }
+
 async function sendMentionNotification(uid, text) {
     try {
         await db.collection('users').doc(uid).collection('notifications').add({
-            type: 'mention', fromUid: me.id, fromName: me.displayName || 'Someone',
-            preview: text.slice(0, 120), read: false,
+            type: 'mention', fromUid: me.id,
+            fromName: me.displayName || 'Someone',
+            preview:  text.slice(0, 120),
+            read:     false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
     } catch(e) { console.warn('mention notif:', e.code); }
@@ -878,8 +889,12 @@ function buildPost(post, depth) {
     if (post.text && post.text.trim()) {
         const txt = document.createElement('p');
         txt.className = 'post-text';
-        if (isBan) { txt.textContent = '[This user has been banned]'; txt.style.opacity = '0.4'; }
-        else { renderMentions(txt, post.text); }
+        if (isBan) {
+            txt.textContent   = '[This user has been banned]';
+            txt.style.opacity = '0.4';
+        } else {
+            renderMentions(txt, post.text);
+        }
         wrap.appendChild(txt);
     }
 
@@ -2894,6 +2909,7 @@ window.openViewersModal = (postId, viewUids) => {
 };
 
 window.openOwnProfile = () => { if (me) openProfile(me.id); };
+
 window._notifCache = [];
 
 window.openNotifications = async function() {
@@ -2991,10 +3007,12 @@ window.filterNotifications = function() {
     window._renderNotifList(filtered);
 };
 
+// ── @mention autocomplete ────────────────────────────────────────
 (function() {
     function setup(id) {
         document.addEventListener('DOMContentLoaded', () => {
-            const ta = document.getElementById(id); if (!ta) return;
+            const ta = document.getElementById(id);
+            if (!ta) return;
             let dd = null;
             const getQ  = () => { const m = ta.value.slice(0, ta.selectionStart).match(/@([\w\-]*)$/); return m ? m[1] : null; };
             const rmDd  = () => { if (dd) { dd.remove(); dd = null; } };
@@ -3002,7 +3020,8 @@ window.filterNotifications = function() {
                 rmDd();
                 const hits = Object.keys(allUsers).filter(uid => {
                     const u = allUsers[uid];
-                    return (u.displayName || '').toLowerCase().startsWith(q.toLowerCase()) && !u.deactivated && uid !== me?.id;
+                    return (u.displayName || '').toLowerCase().startsWith(q.toLowerCase())
+                        && !u.deactivated && uid !== me?.id;
                 }).slice(0, 6);
                 if (!hits.length) return;
                 dd = document.createElement('div');
@@ -3013,10 +3032,13 @@ window.filterNotifications = function() {
                     + 'background:rgba(14,18,32,.98);border:1px solid rgba(255,255,255,.14);'
                     + 'border-radius:10px;z-index:2000;box-shadow:0 8px 24px rgba(0,0,0,.5);';
                 hits.forEach(uid => {
-                    const u = allUsers[uid]; const item = document.createElement('div');
-                    item.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:.85rem;';
+                    const u    = allUsers[uid];
+                    const item = document.createElement('div');
+                    item.className = 'mention-item';
                     item.appendChild(makeSmallAvatar(u));
-                    const nm = document.createElement('span'); nm.textContent = u.displayName; item.appendChild(nm);
+                    const nm = document.createElement('span');
+                    nm.textContent = u.displayName;
+                    item.appendChild(nm);
                     item.onmouseenter = () => item.style.background = 'rgba(56,189,248,.10)';
                     item.onmouseleave = () => item.style.background = '';
                     item.onmousedown  = e => {
@@ -3064,7 +3086,7 @@ function startNotificationListener(uid) {
           if (!badge) return;
           badge.textContent   = snap.size || '';
           badge.style.display = snap.size ? 'inline-block' : 'none';
-      }, err => console.warn('notif listener:', err.code));
+      }, () => {});
 }
 
 function startDMBadgeListener(uid) {
