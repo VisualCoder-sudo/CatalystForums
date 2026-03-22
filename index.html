@@ -264,15 +264,12 @@
 
 </div>
 
-<!-- Notifications modal -->
 <div id="notif-modal" class="modal" style="display:none;max-width:400px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
         <h3 style="margin:0;">&#x1F514; Notifications</h3>
         <button onclick="closeAll()" style="background:transparent;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;">&#x2715;</button>
     </div>
-    <input id="notif-search" type="text" placeholder="Search notifications..."
-           oninput="filterNotifications()"
-           style="margin-bottom:12px;">
+    <input id="notif-search" type="text" placeholder="Search notifications..." oninput="filterNotifications()" style="margin-bottom:12px;">
     <div id="notif-list" style="max-height:420px;overflow-y:auto;"></div>
 </div>
 
