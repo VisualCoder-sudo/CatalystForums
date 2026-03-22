@@ -505,8 +505,13 @@ window.removePostMedia = () => {
 
 auth.onAuthStateChanged(async user => {
     if (!user) {
-        // Clear the session ID from storage on sign-out so next login gets a fresh record
-        if (window._lastAuthUid) sessionStorage.removeItem('catalyst_sid_'+window._lastAuthUid);
+        // On sign-out, remove the localStorage session key so the next
+        // login to this account on this browser gets a fresh session record.
+        if (window._sessionUid) {
+            localStorage.removeItem('c_sid_' + window._sessionUid);
+            window._sessionId  = null;
+            window._sessionUid = null;
+        }
         document.getElementById('login-btn').classList.remove('hidden');
         document.getElementById('nav-auth-controls').style.display = 'none';
         document.getElementById('post-creator').classList.add('hidden');
@@ -517,7 +522,6 @@ auth.onAuthStateChanged(async user => {
         me = null;
         return;
     }
-    window._lastAuthUid = user.uid;
 
     const ref  = db.collection("users").doc(user.uid);
     const snap = await ref.get();
@@ -598,37 +602,59 @@ auth.onAuthStateChanged(async user => {
         if (Object.keys(upd).length) await ref.update(upd);
     }
 
-    // Use sessionStorage so page reloads reuse the same session record
-    // (fixes the "10 sessions from same device" bug)
-    let _sid = sessionStorage.getItem('catalyst_sid_' + user.uid);
+    // ── Session management ──────────────────────────────────────────────
+    // localStorage persists across refreshes AND new tabs on the same browser,
+    // so one browser = one session record. sessionStorage was the bug — it
+    // gets cleared when the tab closes, so every new tab wrote a new record.
+    const _sidKey = 'c_sid_' + user.uid;
+    let _sid = localStorage.getItem(_sidKey);
     if (!_sid) {
-        _sid = 's_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
-        sessionStorage.setItem('catalyst_sid_' + user.uid, _sid);
+        // First time this browser has logged in — create a new ID
+        _sid = 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+        localStorage.setItem(_sidKey, _sid);
     }
-    window._sessionId = _sid;
+    window._sessionId  = _sid;
+    window._sessionUid = user.uid;
+
+    // Detect browser + OS for the sessions panel display
     const _ua = navigator.userAgent;
-    const _br = _ua.includes('Firefox')?'Firefox':_ua.includes('Edg')?'Edge':_ua.includes('Chrome')?'Chrome':_ua.includes('Safari')?'Safari':'Browser';
-    const _os = _ua.includes('Android')?'Android':(_ua.includes('iPhone')||_ua.includes('iPad'))?'iOS':_ua.includes('Windows')?'Windows':_ua.includes('Mac')?'macOS':_ua.includes('Linux')?'Linux':'Unknown';
-    // set() with merge:true so reloads just update lastSeen instead of creating a new doc
-    db.collection('users').doc(user.uid).collection('sessions').doc(_sid).set({
-        browser:_br, os:_os,
-        loginAt:  firebase.firestore.FieldValue.serverTimestamp(),
-        lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
-        revoked:  false
-    }, {merge:true}).catch(()=>{});
-    // Update lastSeen every 3 minutes
-    setInterval(()=>{
-        db.collection('users').doc(user.uid).collection('sessions').doc(_sid)
-            .update({lastSeen:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
-    }, 3*60*1000);
-    // Watch for remote revocation
-    db.collection('users').doc(user.uid).collection('sessions').doc(_sid)
-        .onSnapshot(snap=>{
-            if(snap.exists && snap.data().revoked) auth.signOut().then(()=>{
-                sessionStorage.removeItem('catalyst_sid_'+user.uid);
-                location.reload();
-            });
-        }, ()=>{});
+    const _br = _ua.includes('Firefox') ? 'Firefox'
+              : _ua.includes('Edg')     ? 'Edge'
+              : _ua.includes('Chrome')  ? 'Chrome'
+              : _ua.includes('Safari')  ? 'Safari' : 'Browser';
+    const _os = _ua.includes('Android')                       ? 'Android'
+              : _ua.includes('iPhone')||_ua.includes('iPad') ? 'iOS'
+              : _ua.includes('Windows')                       ? 'Windows'
+              : _ua.includes('Mac')                           ? 'macOS'
+              : _ua.includes('Linux')                         ? 'Linux' : 'Unknown';
+
+    // set() with {merge:true} means a page refresh just updates lastSeen
+    // on the existing doc instead of creating a new one.
+    db.collection('users').doc(user.uid)
+      .collection('sessions').doc(_sid)
+      .set({ browser: _br, os: _os,
+             loginAt:  firebase.firestore.FieldValue.serverTimestamp(),
+             lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
+             revoked:  false }, { merge: true })
+      .catch(() => {});
+
+    // Heartbeat: keep lastSeen fresh every 3 minutes
+    setInterval(() => {
+        db.collection('users').doc(user.uid)
+          .collection('sessions').doc(_sid)
+          .update({ lastSeen: firebase.firestore.FieldValue.serverTimestamp() })
+          .catch(() => {});
+    }, 3 * 60 * 1000);
+
+    // Watch for remote revocation — auto sign-out if another device revokes us
+    db.collection('users').doc(user.uid)
+      .collection('sessions').doc(_sid)
+      .onSnapshot(snap => {
+          if (snap.exists && snap.data().revoked === true) {
+              localStorage.removeItem(_sidKey); // force new ID next login
+              auth.signOut().then(() => location.reload());
+          }
+      }, () => {});
 
     ref.onSnapshot(doc => {
         if (!doc.exists) return;
@@ -791,12 +817,15 @@ function renderMentions(container, text) {
     text.split(/(@[\w\-]{1,32})/g).forEach(part => {
         if (/^@[\w\-]{1,32}$/.test(part)) {
             const name = part.slice(1).toLowerCase();
-            const uid  = Object.keys(allUsers).find(u => (allUsers[u].displayName||'').toLowerCase() === name);
+            const uid  = Object.keys(allUsers).find(
+                u => (allUsers[u].displayName || '').toLowerCase() === name
+            );
             if (uid) {
-                const span = document.createElement('span');
-                span.className = 'mention'; span.textContent = part;
-                span.onclick = e => { e.stopPropagation(); openProfile(uid); };
-                container.appendChild(span); return;
+                const sp = document.createElement('span');
+                sp.className = 'mention'; sp.textContent = part;
+                sp.onclick = e => { e.stopPropagation(); openProfile(uid); };
+                container.appendChild(sp);
+                return;
             }
         }
         container.appendChild(document.createTextNode(part));
@@ -806,9 +835,11 @@ function renderMentions(container, text) {
 function extractMentionedUids(text) {
     if (!text) return [];
     const uids = [];
-    (text.match(/@[\w\-]{1,32}/g)||[]).forEach(m => {
+    (text.match(/@[\w\-]{1,32}/g) || []).forEach(m => {
         const name = m.slice(1).toLowerCase();
-        const uid  = Object.keys(allUsers).find(u => (allUsers[u].displayName||'').toLowerCase() === name);
+        const uid  = Object.keys(allUsers).find(
+            u => (allUsers[u].displayName || '').toLowerCase() === name
+        );
         if (uid && uid !== me?.id && !uids.includes(uid)) uids.push(uid);
     });
     return uids;
@@ -817,8 +848,10 @@ function extractMentionedUids(text) {
 async function sendMentionNotification(uid, text) {
     try {
         await db.collection('users').doc(uid).collection('notifications').add({
-            type: 'mention', fromUid: me.id, fromName: me.displayName||'Someone',
-            preview: text.slice(0,80), read: false,
+            type: 'mention', fromUid: me.id,
+            fromName: me.displayName || 'Someone',
+            preview:  text.slice(0, 80),
+            read:     false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
     } catch(e) { console.warn('mention notif:', e.code); }
@@ -2932,11 +2965,11 @@ window.openViewersModal = (postId, viewUids) => {
 window.openOwnProfile = () => { if (me) openProfile(me.id); };
 
 function _timeAgo(d) {
-    const s=Math.floor((Date.now()-d)/1000);
-    if(s<60) return 'just now';
-    if(s<3600) return Math.floor(s/60)+'m ago';
-    if(s<86400) return Math.floor(s/3600)+'h ago';
-    if(s<604800) return Math.floor(s/86400)+'d ago';
+    const s = Math.floor((Date.now() - d) / 1000);
+    if (s < 60)     return 'just now';
+    if (s < 3600)   return Math.floor(s/60) + 'm ago';
+    if (s < 86400)  return Math.floor(s/3600) + 'h ago';
+    if (s < 604800) return Math.floor(s/86400) + 'd ago';
     return d.toLocaleDateString();
 }
 
@@ -2945,110 +2978,128 @@ async function openSessionsManagerInline() {
     if (!list || !me) return;
     list.innerHTML = '<p style="color:var(--muted);font-size:.85rem;padding:6px 0;">Loading...</p>';
     try {
-        const snap = await db.collection('users').doc(me.id).collection('sessions')
-            .orderBy('lastSeen','desc').limit(20).get();
+        const snap = await db.collection('users').doc(me.id)
+            .collection('sessions')
+            .orderBy('lastSeen', 'desc').limit(20).get();
         list.innerHTML = '';
-        if (snap.empty) { list.innerHTML='<div class="empty-tab">No sessions recorded yet.</div>'; return; }
-        const OSE = {Windows:'🖥',macOS:'🍎',iOS:'📱',Android:'📱',Linux:'🐧'};
+        if (snap.empty) {
+            list.innerHTML = '<div class="empty-tab">No sessions recorded yet.</div>';
+            return;
+        }
+        const OSE = { Windows:'🖥', macOS:'🍎', iOS:'📱', Android:'📱', Linux:'🐧' };
         let shown = 0;
         snap.forEach(doc => {
-            const s=doc.data(); if(s.revoked) return; shown++;
+            const s = doc.data();
+            if (s.revoked) return;
+            shown++;
             const isCur = doc.id === window._sessionId;
-            const row=document.createElement('div');
-            row.style.cssText='display:flex;align-items:center;gap:10px;padding:10px 4px;'
-                +'border-bottom:1px solid rgba(255,255,255,.06);'
-                +(isCur?'background:rgba(56,189,248,.05);':'')
-;
-            const ico=document.createElement('div');
-            ico.textContent=OSE[s.os]||'💻'; ico.style.cssText='font-size:1.3rem;flex-shrink:0;';
-            const info=document.createElement('div'); info.style.cssText='flex:1;min-width:0;';
-            const top=document.createElement('div'); top.style.cssText='font-size:.85rem;font-weight:600;';
-            top.textContent=(s.browser||'')+' on '+(s.os||'Unknown');
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 4px;'
+                + 'border-bottom:1px solid rgba(255,255,255,.06);'
+                + (isCur ? 'background:rgba(56,189,248,.05);' : '');
+            const ico = document.createElement('div');
+            ico.textContent = OSE[s.os] || '💻';
+            ico.style.cssText = 'font-size:1.3rem;flex-shrink:0;';
+            const info = document.createElement('div');
+            info.style.cssText = 'flex:1;min-width:0;';
+            const top = document.createElement('div');
+            top.style.cssText = 'font-size:.85rem;font-weight:600;';
+            top.textContent = (s.browser || '') + ' on ' + (s.os || 'Unknown');
             if (isCur) {
-                const b=document.createElement('span');
-                b.style.cssText='margin-left:7px;font-size:.68rem;background:rgba(34,197,94,.15);'
-                    +'color:var(--success);border:1px solid var(--success);border-radius:4px;padding:1px 5px;';
-                b.textContent='This device'; top.appendChild(b);
+                const b = document.createElement('span');
+                b.style.cssText = 'margin-left:7px;font-size:.68rem;background:rgba(34,197,94,.15);'
+                    + 'color:var(--success);border:1px solid var(--success);border-radius:4px;padding:1px 5px;';
+                b.textContent = 'This device';
+                top.appendChild(b);
             }
-            const sub=document.createElement('div'); sub.style.cssText='font-size:.7rem;color:var(--muted);';
-            const ls=s.lastSeen?(s.lastSeen.toDate?s.lastSeen.toDate():new Date(s.lastSeen)):null;
-            sub.textContent=ls?'Last seen '+_timeAgo(ls):'';
-            info.appendChild(top); info.appendChild(sub);
-            row.appendChild(ico); row.appendChild(info);
+            const sub = document.createElement('div');
+            sub.style.cssText = 'font-size:.7rem;color:var(--muted);';
+            const ls = s.lastSeen ? (s.lastSeen.toDate ? s.lastSeen.toDate() : new Date(s.lastSeen)) : null;
+            sub.textContent = ls ? 'Last seen ' + _timeAgo(ls) : '';
+            info.appendChild(top);
+            info.appendChild(sub);
+            row.appendChild(ico);
+            row.appendChild(info);
             if (!isCur) {
-                const btn=document.createElement('button');
-                btn.className='btn-sm btn-danger'; btn.textContent='Sign out';
-                btn.onclick=async()=>{
-                    if(!await showConfirm('Sign out this session?')) return;
-                    btn.disabled=true; btn.textContent='...';
+                const btn = document.createElement('button');
+                btn.className = 'btn-sm btn-danger';
+                btn.textContent = 'Sign out';
+                btn.onclick = async () => {
+                    if (!await showConfirm('Sign out this session?')) return;
+                    btn.disabled = true; btn.textContent = '...';
                     try {
-                        await db.collection('users').doc(me.id).collection('sessions')
-                            .doc(doc.id).update({revoked:true});
-                        row.style.opacity='0.35'; btn.textContent='Signed out';
-                    } catch(e) { btn.disabled=false; btn.textContent='Sign out'; showAlert('Failed: '+(e.code||e.message)); }
+                        await db.collection('users').doc(me.id)
+                            .collection('sessions').doc(doc.id)
+                            .update({ revoked: true });
+                        row.style.opacity = '0.35';
+                        btn.textContent = 'Signed out';
+                    } catch(e) {
+                        btn.disabled = false; btn.textContent = 'Sign out';
+                        showAlert('Failed: ' + (e.code||e.message));
+                    }
                 };
                 row.appendChild(btn);
             }
             list.appendChild(row);
         });
-        if (!shown) list.innerHTML='<div class="empty-tab">No other active sessions.</div>';
+        if (!shown) list.innerHTML = '<div class="empty-tab">No other active sessions.</div>';
     } catch(e) {
-        list.innerHTML='<p style="color:var(--danger);font-size:.85rem;padding:6px 0;">Error: '+(e.code||e.message)+'</p>';
+        list.innerHTML = '<p style="color:var(--danger);font-size:.85rem;padding:6px 0;">Error: ' + (e.code||e.message) + '</p>';
     }
 }
 
 
 window.openNotifications = async () => {
     if (!me) return;
-    const modal = document.getElementById('notif-modal');
-    const list  = document.getElementById('notif-list');
-    const search= document.getElementById('notif-search');
-    if (!modal || !list) return;
-    if (search) search.value = '';
     document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
     document.getElementById('overlay').style.display = 'block';
-    modal.style.display = 'block';
+    document.getElementById('notif-modal').style.display = 'block';
+    const search = document.getElementById('notif-search');
+    if (search) search.value = '';
+    window._notifCache = [];
+    const list = document.getElementById('notif-list');
     list.innerHTML = '<p style="color:var(--muted);font-size:.85rem;padding:10px 0;">Loading...</p>';
-    window._notifDocs = [];
     try {
-        const snap = await db.collection('users').doc(me.id).collection('notifications')
-            .orderBy('createdAt','desc').limit(50).get();
-        // Mark all unread as read
-        const b = db.batch();
-        snap.docs.forEach(d => { if (!d.data().read) b.update(d.ref,{read:true}); });
-        b.commit().catch(()=>{});
-        window._notifDocs = snap.docs.map(d => ({id:d.id,...d.data()}));
-        renderNotifList(window._notifDocs);
+        const snap = await db.collection('users').doc(me.id)
+            .collection('notifications')
+            .orderBy('createdAt', 'desc').limit(50).get();
+        // Mark all as read in one batch
+        const batch = db.batch();
+        snap.docs.forEach(d => { if (!d.data().read) batch.update(d.ref, { read: true }); });
+        batch.commit().catch(() => {});
+        window._notifCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        _renderNotifList(window._notifCache);
     } catch(e) {
-        list.innerHTML = '<p style="color:var(--danger);font-size:.85rem;padding:10px 0;">Error: '+(e.code||e.message)+'</p>';
+        list.innerHTML = '<p style="color:var(--danger);font-size:.85rem;padding:10px 0;">Error: ' + (e.code||e.message) + '</p>';
     }
 };
 
-function renderNotifList(docs) {
+function _renderNotifList(items) {
     const list = document.getElementById('notif-list');
     if (!list) return;
     list.innerHTML = '';
-    if (!docs.length) {
-        list.innerHTML = '<div class="empty-tab" style="padding:28px 0;">No notifications yet.<br><span style="font-size:.78rem;color:var(--muted);">You will see @mentions here.</span></div>';
+    if (!items.length) {
+        list.innerHTML = '<div class="empty-tab" style="padding:28px 0;">No notifications yet. @mention someone to get started.</div>';
         return;
     }
-    docs.forEach(n => {
+    items.forEach(n => {
         const row = document.createElement('div');
-        row.style.cssText = 'padding:12px 4px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;border-radius:6px;transition:background .12s;';
-        if (!n.read) row.style.background = 'rgba(56,189,248,.05)';
+        row.style.cssText = 'padding:12px 4px;border-bottom:1px solid rgba(255,255,255,.06);'
+            + 'cursor:pointer;border-radius:6px;transition:background .12s;'
+            + (n.read ? '' : 'background:rgba(56,189,248,.05);');
         row.onmouseenter = () => row.style.background = 'rgba(255,255,255,.04)';
         row.onmouseleave = () => row.style.background = n.read ? '' : 'rgba(56,189,248,.05)';
         const top = document.createElement('div');
         top.style.cssText = 'font-size:.85rem;font-weight:600;color:var(--text);';
-        top.textContent = '@'+(n.fromName||'Someone')+' mentioned you';
+        top.textContent = '@' + (n.fromName || 'Someone') + ' mentioned you';
         const pre = document.createElement('div');
         pre.style.cssText = 'font-size:.78rem;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-        pre.textContent = n.preview||'';
+        pre.textContent = n.preview || '';
         const ts = document.createElement('div');
         ts.style.cssText = 'font-size:.68rem;color:var(--muted);margin-top:3px;';
-        const d2 = n.createdAt ? (n.createdAt.toDate?n.createdAt.toDate():new Date(n.createdAt)) : new Date();
-        const diff = Math.floor((Date.now()-d2)/1000);
-        ts.textContent = diff<60?'just now':diff<3600?Math.floor(diff/60)+'m ago':diff<86400?Math.floor(diff/3600)+'h ago':d2.toLocaleDateString();
+        const d2   = n.createdAt ? (n.createdAt.toDate ? n.createdAt.toDate() : new Date(n.createdAt)) : new Date();
+        const diff = Math.floor((Date.now() - d2) / 1000);
+        ts.textContent = diff < 60 ? 'just now' : diff < 3600 ? Math.floor(diff/60)+'m ago' : diff < 86400 ? Math.floor(diff/3600)+'h ago' : d2.toLocaleDateString();
         row.appendChild(top); row.appendChild(pre); row.appendChild(ts);
         row.onclick = () => { closeAll(); if (n.fromUid) openProfile(n.fromUid); };
         list.appendChild(row);
@@ -3056,12 +3107,15 @@ function renderNotifList(docs) {
 }
 
 window.filterNotifications = function() {
-    const q = ((document.getElementById('notif-search')||{}).value||'').toLowerCase().trim();
-    if (!window._notifDocs) return;
-    const filtered = q
-        ? window._notifDocs.filter(n => (n.fromName||'').toLowerCase().includes(q) || (n.preview||'').toLowerCase().includes(q))
-        : window._notifDocs;
-    renderNotifList(filtered);
+    const q = (document.getElementById('notif-search') || {}).value || '';
+    const lq = q.toLowerCase().trim();
+    if (!window._notifCache) return;
+    const filtered = lq
+        ? window._notifCache.filter(n =>
+            (n.fromName || '').toLowerCase().includes(lq) ||
+            (n.preview  || '').toLowerCase().includes(lq))
+        : window._notifCache;
+    _renderNotifList(filtered);
 };
 
 
@@ -3082,13 +3136,13 @@ function startNotificationListener(uid) {
     if (window._notifStarted) return;
     window._notifStarted = true;
     db.collection('users').doc(uid).collection('notifications')
-      .where('read','==',false)
+      .where('read', '==', false)
       .onSnapshot(snap => {
             const badge = document.getElementById('notif-badge');
             if (!badge) return;
-            badge.textContent = snap.size || '';
+            badge.textContent   = snap.size || '';
             badge.style.display = snap.size ? 'inline-block' : 'none';
-      }, err => console.warn('notif:', err.code));
+      }, err => console.warn('notif listener:', err.code));
 }
 
 function startDMBadgeListener(uid) {
@@ -3347,44 +3401,49 @@ async function deleteConversationAndMessages(convId) {
 (function initMentionAC() {
     function setup(id) {
         document.addEventListener('DOMContentLoaded', () => {
-            const ta = document.getElementById(id); if (!ta) return;
+            const ta = document.getElementById(id);
+            if (!ta) return;
             let dd = null;
-            const getQ = () => { const m = ta.value.slice(0,ta.selectionStart).match(/@([\w\-]*)$/); return m?m[1]:null; };
-            const rmDd = () => { if (dd) { dd.remove(); dd=null; } };
+            const getQ  = () => { const m = ta.value.slice(0, ta.selectionStart).match(/@([\w\-]*)$/); return m ? m[1] : null; };
+            const rmDd  = () => { if (dd) { dd.remove(); dd = null; } };
             const showDd = q => {
                 rmDd();
                 const hits = Object.keys(allUsers).filter(uid => {
-                    const u=allUsers[uid];
-                    return (u.displayName||'').toLowerCase().startsWith(q.toLowerCase()) && !u.deactivated && uid!==me?.id;
-                }).slice(0,6);
+                    const u = allUsers[uid];
+                    return (u.displayName||'').toLowerCase().startsWith(q.toLowerCase())
+                        && !u.deactivated && uid !== me?.id;
+                }).slice(0, 6);
                 if (!hits.length) return;
                 dd = document.createElement('div');
                 const r = ta.getBoundingClientRect();
-                dd.style.cssText = 'position:fixed;left:'+r.left+'px;top:'+(r.bottom+4)+'px;width:'+Math.min(r.width,260)+'px;'
-                    +'max-height:200px;overflow-y:auto;background:rgba(14,18,32,0.98);'
-                    +'border:1px solid rgba(255,255,255,0.14);border-radius:10px;z-index:2000;box-shadow:0 8px 24px rgba(0,0,0,.5);';
+                dd.style.cssText = 'position:fixed;left:'+r.left+'px;top:'+(r.bottom+4)+'px;'
+                    +'width:'+Math.min(r.width,260)+'px;max-height:200px;overflow-y:auto;'
+                    +'background:rgba(14,18,32,.98);border:1px solid rgba(255,255,255,.14);'
+                    +'border-radius:10px;z-index:2000;box-shadow:0 8px 24px rgba(0,0,0,.5);';
                 hits.forEach(uid => {
-                    const u=allUsers[uid]; const item=document.createElement('div');
-                    item.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:.85rem;';
+                    const u = allUsers[uid];
+                    const item = document.createElement('div');
+                    item.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:.85rem;';
                     item.appendChild(makeSmallAvatar(u));
-                    const nm=document.createElement('span'); nm.textContent=u.displayName; item.appendChild(nm);
-                    item.onmouseenter=()=>item.style.background='rgba(56,189,248,.10)';
-                    item.onmouseleave=()=>item.style.background='';
-                    item.onmousedown=e=>{
+                    const nm = document.createElement('span'); nm.textContent = u.displayName;
+                    item.appendChild(nm);
+                    item.onmouseenter = () => item.style.background = 'rgba(56,189,248,.10)';
+                    item.onmouseleave = () => item.style.background = '';
+                    item.onmousedown  = e => {
                         e.preventDefault();
-                        const pos=ta.selectionStart;
-                        const before=ta.value.slice(0,pos).replace(/@[\w\-]*$/,'@'+u.displayName+' ');
-                        ta.value=before+ta.value.slice(pos);
-                        ta.selectionStart=ta.selectionEnd=before.length;
+                        const pos = ta.selectionStart;
+                        const before = ta.value.slice(0, pos).replace(/@[\w\-]*$/, '@' + u.displayName + ' ');
+                        ta.value = before + ta.value.slice(pos);
+                        ta.selectionStart = ta.selectionEnd = before.length;
                         ta.focus(); rmDd();
                     };
                     dd.appendChild(item);
                 });
                 document.body.appendChild(dd);
             };
-            ta.addEventListener('input', ()=>{ const q=getQ(); q!==null?showDd(q):rmDd(); });
-            ta.addEventListener('keydown', e=>{ if(e.key==='Escape') rmDd(); });
-            ta.addEventListener('blur', ()=>setTimeout(rmDd,150));
+            ta.addEventListener('input',   () => { const q = getQ(); q !== null ? showDd(q) : rmDd(); });
+            ta.addEventListener('keydown', e  => { if (e.key === 'Escape') rmDd(); });
+            ta.addEventListener('blur',    () => setTimeout(rmDd, 150));
         });
     }
     setup('post-body');
