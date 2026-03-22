@@ -267,8 +267,11 @@
 </div>
 
 <div id="profile-modal" class="modal" style="max-width:500px;">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:-8px;">
+        <button onclick="closeAll()" style="background:transparent;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0 4px;line-height:1;border-radius:6px;transition:color .12s;" onmouseenter="this.style.color='var(--text)'" onmouseleave="this.style.color='var(--muted)'">&times;</button>
+    </div>
     <div class="prof-header">
-        <div class="avatar" id="prof-avatar"></div>
+        <div class="avatar" id="prof-avatar">
         <div style="flex:1;">
             <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                 <span id="prof-name" style="font-size:1.1rem; font-weight:700;"></span>
@@ -326,7 +329,6 @@
     <div class="prof-tab-content"        id="content-following"></div>
     <div class="prof-tab-content"        id="content-friends"></div>
 
-    <button style="width:100%; margin-top:14px;" onclick="closeAll()">Close</button>
 </div>
 
 <div id="guidelines-modal" class="modal" style="max-width:480px;">
@@ -522,5 +524,6 @@
         </button>
     </div>
 </div>
+
 </body>
 </html>
