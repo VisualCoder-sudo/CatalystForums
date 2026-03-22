@@ -182,7 +182,6 @@
         <div class="settings-tab"        onclick="switchSettingsTab('friends')" id="friends-tab-btn">Friends</div>
         <div class="settings-tab"        onclick="switchSettingsTab('blocked')">Blocked</div>
         <div class="settings-tab"        onclick="switchSettingsTab('account')">Account</div>
-        <div class="settings-tab"        onclick="switchSettingsTab('sessions')">Sessions</div>
     </div>
 
     <div class="settings-pane active" id="spane-profile">
@@ -253,21 +252,18 @@
             Deactivate Account
         </button>
     </div>
-    <div class="settings-pane" id="spane-sessions">
-        <p style="font-size:.8rem;color:var(--muted);margin:0 0 12px;">Devices where your account is signed in.</p>
-        <button onclick="window.openSessionsManagerInline()" style="width:100%;margin-bottom:12px;">&#x1F504; Refresh</button>
-        <div id="sessions-list-inline"></div>
-    </div>
-
 </div>
 
-<div id="notif-modal" class="modal" style="display:none;max-width:400px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+<div id="notif-modal" class="modal" style="display:none;max-width:440px;">
+    <div class="notif-header">
         <h3 style="margin:0;">&#x1F514; Notifications</h3>
-        <button onclick="closeAll()" style="background:transparent;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;">&#x2715;</button>
+        <button onclick="closeAll()" class="notif-close-btn">&#x2715;</button>
     </div>
-    <input id="notif-search" type="text" placeholder="Search notifications..." oninput="window.filterNotifications()" style="margin-bottom:12px;">
-    <div id="notif-list" style="max-height:420px;overflow-y:auto;"></div>
+    <div class="notif-search-wrap">
+        <input id="notif-search" type="text" placeholder="Search by name or content..."
+               oninput="window.filterNotifications()">
+    </div>
+    <div id="notif-list" style="max-height:460px;overflow-y:auto;padding:4px 0;"></div>
 </div>
 
 <div id="profile-modal" class="modal" style="max-width:500px;">
@@ -463,9 +459,13 @@
     </div>
     <p></p>
 
-    <div class="menu-option" onclick="closeAll(); window.openNotifications()" style="position:relative;">
+    <div class="menu-option" onclick="window.openNotifications()" style="position:relative;">
         &#x1F514; Notifications
-        <span id="notif-badge" style="display:none;position:absolute;top:8px;right:10px;background:var(--danger);color:white;font-size:0.6rem;font-weight:800;padding:1px 5px;border-radius:10px;min-width:16px;text-align:center;"></span>
+        <span id="notif-badge"
+              style="display:none;position:absolute;top:8px;right:10px;
+                     background:var(--danger);color:white;font-size:0.6rem;
+                     font-weight:800;padding:1px 5px;border-radius:10px;
+                     min-width:16px;text-align:center;"></span>
     </div>
     <p></p>
 </div>
@@ -522,6 +522,5 @@
         </button>
     </div>
 </div>
-
 </body>
 </html>
