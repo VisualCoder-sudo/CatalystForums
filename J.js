@@ -38,10 +38,65 @@ let activeDMUid     = null;
 let dmMessagesUnsub = null;
 let replyMediaQueue = {};
 
+window._debugLog = [];
+
+function _dbg(source, message, detail) {
+    const entry = { t: new Date().toLocaleTimeString(), source: String(source), message: String(message||""), detail: String(detail||"") };
+    window._debugLog.unshift(entry);
+    if (window._debugLog.length > 20) window._debugLog.pop();
+    const panel = document.getElementById("_debug-panel");
+    if (panel && panel.style.display !== "none") _renderDebugPanel();
+}
+
+function _renderDebugPanel() {
+    const body = document.getElementById("_debug-body");
+    if (!body) return;
+    if (!window._debugLog.length) { body.innerHTML = '<div style="color:#475569;padding:8px 0;font-size:0.75rem;">No errors yet.</div>'; return; }
+    body.innerHTML = window._debugLog.map(e =>
+        '<div style="border-bottom:1px solid #1e293b;padding:5px 0;">'
+        + '<span style="color:#fbbf24;font-size:0.7rem;">' + e.t + '</span> '
+        + '<span style="color:#f87171;font-size:0.72rem;">' + e.source + '</span> '
+        + '<span style="color:#e2e8f0;font-size:0.72rem;">' + e.message + '</span>'
+        + (e.detail ? '<div style="color:#94a3b8;font-size:0.68rem;padding-left:8px;">' + e.detail + '</div>' : "")
+        + '</div>'
+    ).join("");
+}
+
+window.toggleDebugPanel = function() {
+    let panel = document.getElementById("_debug-panel");
+    if (!panel) {
+        panel = document.createElement("div");
+        panel.id = "_debug-panel";
+        panel.style.cssText = "position:fixed;bottom:0;left:0;right:0;max-height:45vh;overflow-y:auto;background:rgba(2,6,23,0.97);backdrop-filter:blur(10px);border-top:2px solid #f87171;padding:12px 16px;z-index:9999;font-family:monospace;";
+        panel.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+            + '<span style="font-weight:700;font-size:0.78rem;color:#f87171;">&#x1F41B; DEBUG LOG &mdash; Ctrl+Shift+D to close</span>'
+            + '<button onclick="toggleDebugPanel()" style="background:transparent;border:none;color:#94a3b8;cursor:pointer;font-size:0.85rem;">&#x2715; Close</button>'
+            + '</div><div id="_debug-body"></div>';
+        document.body.appendChild(panel);
+        _renderDebugPanel();
+    } else {
+        panel.style.display = panel.style.display === "none" ? "" : "none";
+        if (panel.style.display !== "none") _renderDebugPanel();
+    }
+};
+
+document.addEventListener("keydown", e => {
+    if (e.ctrlKey && e.shiftKey && e.key === "D") { e.preventDefault(); toggleDebugPanel(); }
+});
+
 window.onerror = (message, source, lineno, colno, error) => {
-    if (typeof message === 'string' && message.includes('ResizeObserver')) return true;
-    console.error('Unhandled JS error:', message, source, lineno, colno, error);
+    if (typeof message === "string" && message.includes("ResizeObserver")) return true;
+    console.error("Unhandled JS error:", message, source, lineno, colno, error);
+    _dbg("window.onerror", message, source + ":" + lineno + ":" + colno);
     return false;
+};
+
+window.onunhandledrejection = event => {
+    const r = event.reason;
+    const msg = r && r.message ? r.message : String(r);
+    const code = r && r.code ? r.code : "";
+    console.error("Unhandled rejection:", r);
+    _dbg("Promise.reject", msg, code);
 };
 
 
@@ -113,6 +168,7 @@ window.submitQuickPost = async function() {
     await submitPost();
     if (!mainBody.value) {
         ta.value = '';
+        renderQuickPostPreview();
         closeQuickPost();
     } else {
         mainBody.value = originalValue;
@@ -121,7 +177,47 @@ window.submitQuickPost = async function() {
 
 window.handleQuickPostMedia = function(input) {
     handlePostMedia(input);
+    setTimeout(renderQuickPostPreview, 120);
 };
+
+function renderQuickPostPreview() {
+    const qp = document.getElementById("quick-post-media-preview");
+    if (!qp) return;
+    qp.innerHTML = "";
+    if (!postMedia.length) { qp.style.display = "none"; return; }
+    qp.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;";
+    postMedia.forEach((media, index) => {
+        const isVideo = media.mimeType.startsWith("video/");
+        const wrap = document.createElement("div");
+        wrap.style.cssText = isVideo ? "position:relative;width:110px;height:65px;" : "position:relative;width:65px;height:65px;";
+        if (isVideo) {
+            const vid = document.createElement("video");
+            vid.src = media.localUrl; vid.muted = true;
+            vid.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:7px;border:1px solid var(--primary);";
+            const play = document.createElement("div");
+            play.textContent = "\u25b6";
+            play.style.cssText = "position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:white;font-size:1.1rem;pointer-events:none;text-shadow:0 0 6px rgba(0,0,0,0.8);";
+            wrap.appendChild(vid); wrap.appendChild(play);
+        } else {
+            const img = document.createElement("img");
+            img.src = media.localUrl;
+            img.style.cssText = "width:100%;height:100%;object-fit:cover;border-radius:7px;border:1px solid var(--primary);";
+            wrap.appendChild(img);
+        }
+        const rm = document.createElement("button");
+        rm.type = "button"; rm.innerHTML = "&times;";
+        rm.style.cssText = "position:absolute;top:-5px;right:-5px;width:18px;height:18px;min-width:0;padding:0;font-size:12px;background:#ff4d4d;border:none;border-radius:50%;color:white;cursor:pointer;z-index:1;";
+        rm.onclick = e => {
+            e.preventDefault(); e.stopPropagation();
+            URL.revokeObjectURL(media.localUrl);
+            postMedia.splice(index, 1);
+            renderMediaPreviews();
+            renderQuickPostPreview();
+        };
+        wrap.appendChild(rm);
+        qp.appendChild(wrap);
+    });
+}
 
 
 window.togglePassVis = function(inputId, btn) {
@@ -162,7 +258,6 @@ function rankBadgeClass(rank) {
 window.openModal = id => {
     document.getElementById(id).style.display = 'block';
     document.getElementById('overlay').style.display = 'block';
-    document.body.style.overflow = 'hidden';
 };
 
 window.closeModal = id => {
@@ -175,7 +270,6 @@ window.closeModal = id => {
 window.closeAll = () => {
     document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
     document.getElementById('overlay').style.display = 'none';
-    document.body.style.overflow = '';
     currentProfileUid = null;
 };
 
@@ -657,7 +751,6 @@ auth.onAuthStateChanged(async user => {
         }
 
         startDMBadgeListener(user.uid);
-        startNotificationListener(user.uid);
         updateMenuUserRow();
         renderFeed();
     });
@@ -753,53 +846,6 @@ function renderFeed() {
     }
 }
 
-// Parse @Username tokens and render as clickable spans
-function renderMentions(container, text) {
-    if (!text) return;
-    text.split(/(@[\w\-]{1,32})/g).forEach(part => {
-        if (/^@[\w\-]{1,32}$/.test(part)) {
-            const name = part.slice(1).toLowerCase();
-            const uid  = Object.keys(allUsers).find(
-                u => (allUsers[u].displayName || '').toLowerCase() === name
-            );
-            if (uid) {
-                const sp = document.createElement('span');
-                sp.className   = 'mention';
-                sp.textContent = part;
-                sp.onclick = e => { e.stopPropagation(); openProfile(uid); };
-                container.appendChild(sp);
-                return;
-            }
-        }
-        container.appendChild(document.createTextNode(part));
-    });
-}
-
-function extractMentionedUids(text) {
-    if (!text) return [];
-    const uids = [];
-    (text.match(/@[\w\-]{1,32}/g) || []).forEach(m => {
-        const name = m.slice(1).toLowerCase();
-        const uid  = Object.keys(allUsers).find(
-            u => (allUsers[u].displayName || '').toLowerCase() === name
-        );
-        if (uid && uid !== me?.id && !uids.includes(uid)) uids.push(uid);
-    });
-    return uids;
-}
-
-async function sendMentionNotification(uid, text) {
-    try {
-        await db.collection('users').doc(uid).collection('notifications').add({
-            type: 'mention', fromUid: me.id,
-            fromName: me.displayName || 'Someone',
-            preview:  text.slice(0, 120),
-            read:     false,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-    } catch(e) { console.warn('mention notif:', e.code); }
-}
-
 function buildPost(post, depth) {
     const u             = allUsers[post.authorUid] || { displayName: "Deleted User", rank: "User", verified: false };
     const isBan         = u.rank === "Banned";
@@ -888,13 +934,10 @@ function buildPost(post, depth) {
 
     if (post.text && post.text.trim()) {
         const txt = document.createElement('p');
-        txt.className = 'post-text';
-        if (isBan) {
-            txt.textContent   = '[This user has been banned]';
-            txt.style.opacity = '0.4';
-        } else {
-            renderMentions(txt, post.text);
-        }
+        txt.className  = "post-text";
+        txt.style.fontFamily = "inherit";
+        txt.textContent = isBan ? "[This user has been banned]" : post.text;
+        if (isBan) txt.style.opacity = "0.4";
         wrap.appendChild(txt);
     }
 
@@ -1152,7 +1195,6 @@ window.submitPost = async () => {
         });
 
         lastPostTime = Date.now();
-        extractMentionedUids(val).forEach(uid => sendMentionNotification(uid, val));
         body.value   = "";
         postMedia.forEach(m => URL.revokeObjectURL(m.localUrl));
         postMedia    = [];
@@ -1160,6 +1202,7 @@ window.submitPost = async () => {
 
     } catch (e) {
         console.error('Post submission error:', e);
+        _dbg('submitPost', e.message, e.code);
         showAlert('Failed to post: ' + e.message);
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = "Post"; }
@@ -1192,7 +1235,6 @@ async function sendReply(parentId, input, wrap) {
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
     }).then(() => {
         lastPostTime = Date.now(); input.value = "";
-        extractMentionedUids(val).forEach(uid => sendMentionNotification(uid, val));
         if (replyMediaQueue[parentId]) {
             replyMediaQueue[parentId].forEach(m => URL.revokeObjectURL(m.localUrl));
             delete replyMediaQueue[parentId];
@@ -1586,6 +1628,7 @@ window.toggleFollow = async () => {
         fb.className = 'btn-follow' + (isFol ? '' : ' following');
     } catch (e) {
         console.error('Follow error:', e.code, e.message);
+        _dbg('toggleFollow', e.message, e.code);
         showAlert('Follow failed (' + (e.code||'unknown') + '): ' + e.message);
     }
     fb.disabled = false;
@@ -1636,6 +1679,7 @@ window.toggleFriendRequest = async () => {
         }
     } catch (e) {
         console.error('Friend request error:', e.code, e.message);
+        _dbg('toggleFriendRequest', e.message, e.code);
         showAlert('Friend request failed (' + (e.code||'unknown') + '): ' + e.message);
     }
     frd.disabled = false;
@@ -1702,6 +1746,7 @@ window.toggleBlock = async () => {
         }
     } catch (e) {
         console.error('Block/Unblock error:', e.code, e.message);
+        _dbg('toggleBlock', e.message, e.code);
         showAlert('Block action failed (' + (e.code||'unknown') + '): ' + e.message);
     }
     bb.disabled = false;
@@ -2910,159 +2955,6 @@ window.openViewersModal = (postId, viewUids) => {
 
 window.openOwnProfile = () => { if (me) openProfile(me.id); };
 
-window._notifCache = [];
-
-window.openNotifications = async function() {
-    if (!me) return;
-    document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
-    document.getElementById('overlay').style.display = 'block';
-    document.getElementById('notif-modal').style.display = 'block';
-    document.body.style.overflow = 'hidden';
-    const srch = document.getElementById('notif-search');
-    if (srch) srch.value = '';
-    window._notifCache = [];
-    const list = document.getElementById('notif-list');
-    list.innerHTML = '<div class="notif-loading">Loading...</div>';
-    try {
-        const snap = await db.collection('users').doc(me.id)
-            .collection('notifications')
-            .orderBy('createdAt', 'desc').limit(50).get();
-        const batch = db.batch();
-        snap.docs.forEach(d => { if (!d.data().read) batch.update(d.ref, { read: true }); });
-        batch.commit().catch(() => {});
-        window._notifCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        window._renderNotifList(window._notifCache);
-    } catch(e) {
-        list.innerHTML = '<p style="color:var(--danger);font-size:.85rem;padding:12px 0;">Error: ' + (e.code || e.message) + '</p>';
-    }
-};
-
-window._renderNotifList = function(items) {
-    const list = document.getElementById('notif-list');
-    if (!list) return;
-    list.innerHTML = '';
-    if (!items.length) {
-        const empty = document.createElement('div');
-        empty.className = 'notif-empty';
-        const ico = document.createElement('div'); ico.className = 'notif-empty-icon'; ico.textContent = '\uD83D\uDD14'.replace(/./su, c => c);
-        empty.appendChild(ico);
-        const msg = document.createElement('div'); msg.textContent = 'No notifications yet.';
-        const sub = document.createElement('div'); sub.className = 'notif-empty-sub'; sub.textContent = '@mention someone in a post to send them a notification.';
-        empty.appendChild(msg); empty.appendChild(sub);
-        list.appendChild(empty);
-        return;
-    }
-    items.forEach(n => {
-        const row = document.createElement('div');
-        row.className = 'notif-row' + (n.read ? '' : ' notif-unread');
-        const iconWrap = document.createElement('div');
-        iconWrap.className = 'notif-icon';
-        const fromUser = n.fromUid ? allUsers[n.fromUid] : null;
-        if (fromUser) {
-            iconWrap.appendChild(makeSmallAvatar(fromUser));
-        } else {
-            iconWrap.textContent = String.fromCodePoint(0x1F514);
-            iconWrap.style.fontSize = '1.2rem';
-        }
-        const content = document.createElement('div');
-        content.className = 'notif-content';
-        const title = document.createElement('div');
-        title.className = 'notif-title';
-        const nameSpan = document.createElement('span');
-        nameSpan.style.color = 'var(--primary)';
-        nameSpan.textContent = '@' + (n.fromName || 'Someone');
-        title.appendChild(nameSpan);
-        title.appendChild(document.createTextNode(' mentioned you'));
-        const preview = document.createElement('div');
-        preview.className = 'notif-preview';
-        preview.textContent = n.preview || '';
-        const ts = document.createElement('div');
-        ts.className = 'notif-ts';
-        const d2   = n.createdAt ? (n.createdAt.toDate ? n.createdAt.toDate() : new Date(n.createdAt)) : new Date();
-        const diff = Math.floor((Date.now() - d2) / 1000);
-        ts.textContent = diff < 60 ? 'just now'
-            : diff < 3600   ? Math.floor(diff / 60) + 'm ago'
-            : diff < 86400  ? Math.floor(diff / 3600) + 'h ago'
-            : diff < 604800 ? Math.floor(diff / 86400) + 'd ago'
-            : d2.toLocaleDateString();
-        content.appendChild(title);
-        content.appendChild(preview);
-        content.appendChild(ts);
-        row.appendChild(iconWrap);
-        row.appendChild(content);
-        row.onclick = () => { closeAll(); if (n.fromUid) openProfile(n.fromUid); };
-        list.appendChild(row);
-    });
-};
-
-window.filterNotifications = function() {
-    const el = document.getElementById('notif-search');
-    const q  = (el ? el.value : '').toLowerCase().trim();
-    if (!window._notifCache) return;
-    const filtered = q
-        ? window._notifCache.filter(n =>
-            (n.fromName || '').toLowerCase().includes(q) ||
-            (n.preview  || '').toLowerCase().includes(q))
-        : window._notifCache;
-    window._renderNotifList(filtered);
-};
-
-// ── @mention autocomplete ────────────────────────────────────────
-(function() {
-    function setup(id) {
-        document.addEventListener('DOMContentLoaded', () => {
-            const ta = document.getElementById(id);
-            if (!ta) return;
-            let dd = null;
-            const getQ  = () => { const m = ta.value.slice(0, ta.selectionStart).match(/@([\w\-]*)$/); return m ? m[1] : null; };
-            const rmDd  = () => { if (dd) { dd.remove(); dd = null; } };
-            const showDd = q => {
-                rmDd();
-                const hits = Object.keys(allUsers).filter(uid => {
-                    const u = allUsers[uid];
-                    return (u.displayName || '').toLowerCase().startsWith(q.toLowerCase())
-                        && !u.deactivated && uid !== me?.id;
-                }).slice(0, 6);
-                if (!hits.length) return;
-                dd = document.createElement('div');
-                dd.className = 'mention-dropdown';
-                const r = ta.getBoundingClientRect();
-                dd.style.cssText = 'position:fixed;left:' + r.left + 'px;top:' + (r.bottom + 4) + 'px;'
-                    + 'width:' + Math.min(r.width, 260) + 'px;max-height:200px;overflow-y:auto;'
-                    + 'background:rgba(14,18,32,.98);border:1px solid rgba(255,255,255,.14);'
-                    + 'border-radius:10px;z-index:2000;box-shadow:0 8px 24px rgba(0,0,0,.5);';
-                hits.forEach(uid => {
-                    const u    = allUsers[uid];
-                    const item = document.createElement('div');
-                    item.className = 'mention-item';
-                    item.appendChild(makeSmallAvatar(u));
-                    const nm = document.createElement('span');
-                    nm.textContent = u.displayName;
-                    item.appendChild(nm);
-                    item.onmouseenter = () => item.style.background = 'rgba(56,189,248,.10)';
-                    item.onmouseleave = () => item.style.background = '';
-                    item.onmousedown  = e => {
-                        e.preventDefault();
-                        const pos = ta.selectionStart;
-                        const before = ta.value.slice(0, pos).replace(/@[\w\-]*$/, '@' + u.displayName + ' ');
-                        ta.value = before + ta.value.slice(pos);
-                        ta.selectionStart = ta.selectionEnd = before.length;
-                        ta.focus(); rmDd();
-                    };
-                    dd.appendChild(item);
-                });
-                document.body.appendChild(dd);
-            };
-            ta.addEventListener('input',   () => { const q = getQ(); q !== null ? showDd(q) : rmDd(); });
-            ta.addEventListener('keydown', e  => { if (e.key === 'Escape') rmDd(); });
-            ta.addEventListener('blur',    () => setTimeout(rmDd, 150));
-        });
-    }
-    setup('post-body');
-    setup('quick-post-body');
-})();
-
-
 function updateMenuUserRow() {
     if (!me) return;
     const row   = document.getElementById('menu-user-row');
@@ -3075,19 +2967,6 @@ function updateMenuUserRow() {
 }
 
 function dmConvId(a, b) { return [a, b].sort().join('_'); }
-
-function startNotificationListener(uid) {
-    if (window._notifStarted) return;
-    window._notifStarted = true;
-    db.collection('users').doc(uid).collection('notifications')
-      .where('read', '==', false)
-      .onSnapshot(snap => {
-          const badge = document.getElementById('notif-badge');
-          if (!badge) return;
-          badge.textContent   = snap.size || '';
-          badge.style.display = snap.size ? 'inline-block' : 'none';
-      }, () => {});
-}
 
 function startDMBadgeListener(uid) {
     if (window._dmBadgeStarted) return;
@@ -3210,6 +3089,7 @@ function renderInbox() {
                         }
                     } catch (err) {
                         console.error('Delete convo error:', err.code, err.message);
+                        _dbg('deleteConversation', err.message, err.code);
                         showAlert('Failed: ' + (err.code||err.message));
                     }
                     delBtn.disabled = false;
@@ -3219,6 +3099,7 @@ function renderInbox() {
         })
       .catch(err => {
             console.error('renderInbox:', err.code, err.message);
+            _dbg('renderInbox', err.message, err.code);
             list.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;padding:10px 0;">Error: ' + (err.code||err.message) + '</p>';
         });
 }
@@ -3280,6 +3161,7 @@ function loadDMMessages(uid) {
             c.scrollTop = c.scrollHeight;
         }, err => {
             console.error('loadDMMessages:', err.code, err.message);
+            _dbg('loadDMMessages', err.message, err.code);
             c.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;text-align:center;padding:20px 0;">Error: ' + (err.code||err.message) + '</p>';
         });
 }
