@@ -197,40 +197,14 @@ to{opacity:1;transform:translateY(0)}
 }
 #quick-post-popup textarea:focus{border-color:var(--primary);box-shadow:0 0 0 2px #38bdf826}
 .Quick-Post-FAB{display:none;position:fixed;bottom:80px;left:20px;width:44px;height:44px;border-radius:50%;background:var(--primary);color:#0f172a;border:none;font-size:1.4rem;font-weight:700;cursor:pointer;z-index:8;box-shadow:0 4px 20px #00000080;align-items:center;justify-content:center}
-.mention {
-    color: var(--primary);
-    font-weight: 600;
-    cursor: pointer;
-    border-radius: 3px;
-    padding: 0 2px;
-    transition: background .12s;
-}
-.mention:hover { background: rgba(56,189,248,0.14); text-decoration: underline; }
+/* ── @mention in post text ────────────────────────────── */
+.mention { color:var(--primary); font-weight:600; cursor:pointer; border-radius:3px; padding:0 2px; transition:background .12s; }
+.mention:hover { background:rgba(56,189,248,.14); text-decoration:underline; }
 
-.mention-dropdown { animation: mentionFade .12s ease-out; }
-@keyframes mentionFade {
-    from { opacity:0; transform:translateY(-4px); }
-    to   { opacity:1; transform:translateY(0); }
-}
+/* ── @mention autocomplete dropdown ──────────────────── */
+.mention-dropdown { animation:mentionFade .12s ease-out; }
+@keyframes mentionFade { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
 
-.sidebar-notif-row {
-    padding: 9px 4px;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-    cursor: pointer;
-    border-radius: 6px;
-    transition: background .12s;
-}
-.sidebar-notif-row:hover { background: rgba(255,255,255,0.04); }
-.sidebar-notif-row.unread { background: rgba(56,189,248,0.05); }
-.sidebar-notif-row.unread:hover { background: rgba(56,189,248,0.09); }
-
-#sidebar-notif-panel {
-    animation: notifSlideDown .15s ease-out;
-}
-@keyframes notifSlideDown {
-    from { opacity:0; transform:translateY(-6px); }
-    to   { opacity:1; transform:translateY(0); }
-}
-
-#sessions-list-inline > div { transition: background .12s; }
-#sessions-list-inline > div:hover { background: rgba(255,255,255,0.03) !important; }
+/* ── Sessions rows ────────────────────────────────────── */
+#sessions-list-inline > div { transition:background .12s; }
+#sessions-list-inline > div:hover { background:rgba(255,255,255,.03) !important; }
