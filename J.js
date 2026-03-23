@@ -369,7 +369,7 @@ function accountOlderThan(createdAt, seconds) {
 const HARD_BLOCKED_WORDS = [
     "nigger", "nigga", "kike", "spic", "chink", "wetback",
     "faggot", "tranny", "nonce", "cock", "rape", "pussy",
-    "rapist", "nazi", "hitler", "dick", "dicks", "dick", "kill", "d¡ck", "k¡ll"
+    "rapist", "nazi", "hitler", "dick", "dicks", "dick", "kill", "d¡ck", "k¡ll", "die", "d¡e"
 ];
 
 function containsProfanity(text) {
